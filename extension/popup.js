@@ -202,7 +202,7 @@ function switchPanel(panelId) {
 
 function renderHistory() {
   const container = document.getElementById('historyList');
-  container.innerHTML = '';
+  container.textContent = '';
 
   if (scanHistory.length === 0) {
     const emptyDiv = document.createElement('div');
@@ -591,7 +591,7 @@ function renderResult(result) {
   // Verdict badge
   const badge = document.getElementById('verdictBadge');
   badge.className = `verdict-badge ${verdict.toLowerCase()}`;
-  badge.innerHTML = '';
+  badge.textContent = '';
   badge.appendChild(document.createTextNode(verdict + ' '));
 
   // Confidence
@@ -679,7 +679,7 @@ function renderResult(result) {
 
 function renderFlags(flags) {
   const container = document.getElementById('flagsList');
-  container.innerHTML = '';
+  container.textContent = '';
 
   if (!flags || flags.length === 0) {
     const noFlags = document.createElement('div');

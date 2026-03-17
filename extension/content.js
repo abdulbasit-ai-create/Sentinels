@@ -659,7 +659,8 @@ function highlightSuspiciousElements(flags) {
     const banner = document.createElement('div');
     banner.className = 'itl-warning-banner';
     banner.id = 'itl-banner';
-    banner.innerHTML = `⚠️ Is This Legit? detected ${flags.length} warning${flags.length > 1 ? 's' : ''} on this page`;
+    const warningText = `⚠️ Is This Legit? detected ${flags.length} warning${flags.length > 1 ? 's' : ''} on this page`;
+    banner.textContent = warningText;
     document.body.prepend(banner);
   }
 
