@@ -1,19 +1,14 @@
 // ============================================================
 //  Is This Legit? — backend/modules/llm.js
-//  AI analysis using Groq Llama 3.3 70B
-//  With fallback, caching, rate limiting, structured output parsing
-//
-//  ENHANCEMENTS:
-//  - Fallback model: keyword analysis when Groq unavailable
-//  - Structured output parsing with validation & retry
-//  - LLM response caching (per domain, TTL 30 min)
-//  - Rate limiting per IP
-//  - Prompt injection protection (sanitizing user data)
+//  AI analysis using Groq — dynamically managed models
+//  With caching, rate limiting, fallback, injection protection
+//  Uses model_manager for auto-discovery, fallback & tracking
 // ============================================================
 
 const Groq = require('groq-sdk');
 const crypto = require('crypto');
 const { isTrustedDomain, extractRootDomain } = require('./heuristics');
+const modelManager = require('./model_manager');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -79,7 +74,7 @@ setInterval(() => {
 }, 5 * 60 * 1000).unref();
 
 // ═══════════════════════════════════════════════════════════════
-//  MAIN EXPORT with cache + rate limit + fallback
+//  MAIN EXPORT with cache + rate limit + model fallback
 // ═══════════════════════════════════════════════════════════════
 
 async function analyzeWithAI(data, clientIp = 'unknown') {
@@ -101,14 +96,14 @@ async function analyzeWithAI(data, clientIp = 'unknown') {
   // 3. Sanitize user data for prompt injection protection
   const sanitizedData = sanitizeForPrompt(data);
 
-  // 4. Try Groq API
+  // 4. Try Groq API with model fallback chain
   try {
     const result = await queryGroq(sanitizedData);
     setCachedResponse(cacheKey, result);
     return result;
   } catch (err) {
-    console.error('[LLM] Groq API error:', err.message);
-    // 5. Fallback
+    console.error('[LLM] All Groq models failed:', err.message);
+    // 5. Fallback to keyword-based analysis
     const fallback = fallbackAnalysis(sanitizedData);
     // Don't cache fallback results
     return fallback;
@@ -116,51 +111,84 @@ async function analyzeWithAI(data, clientIp = 'unknown') {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  GROQ API CALL with retry + structured output parsing
+//  GROQ API CALL — uses model_manager for dynamic model selection
+//  with automatic fallback through model chain + retry per model
 // ═══════════════════════════════════════════════════════════════
 
-async function queryGroq(data, retries = 2) {
+async function queryGroq(data) {
   const prompt = buildAdvancedPrompt(data);
+  const systemPrompt = buildSystemPrompt(data);
+
+  // Get the fallback chain from model_manager
+  const taskType = data.taskType || 'analysis';
+  const fallbackChain = modelManager.getFallbackChain(taskType);
+
+  console.log(`[LLM] Model fallback chain: [${fallbackChain.join(' -> ')}]`);
+
   let lastError;
+  const modelsAttempted = [];
 
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const response = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
-        max_tokens: 900,
-        temperature: 0.1,
-        messages: [
-          { role: 'system', content: buildSystemPrompt(data) },
-          { role: 'user', content: prompt }
-        ]
-      });
+  // Try each model in the fallback chain
+  for (const modelId of fallbackChain) {
+    modelsAttempted.push(modelId);
 
-      const raw = response.choices[0]?.message?.content?.trim() || '{}';
-      const parsed = parseLLMResponse(raw);
+    // Retry logic for each model (2 retries per model)
+    for (let attempt = 0; attempt <= 2; attempt++) {
+      const start = Date.now();
+      try {
+        console.log(`[LLM] Attempting model: ${modelId} (attempt ${attempt + 1})`);
+        const response = await groq.chat.completions.create({
+          model: modelId,
+          max_tokens: 900,
+          temperature: 0.1,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: prompt }
+          ]
+        });
 
-      if (parsed) {
-        return parsed;
-      }
+        const latency = Date.now() - start;
+        const raw = response.choices[0]?.message?.content?.trim() || '{}';
+        const parsed = parseLLMResponse(raw, modelId);
 
-      lastError = new Error('Failed to parse LLM response');
-    } catch (err) {
-      lastError = err;
-      if (attempt < retries) {
-        const delay = Math.min(1000 * Math.pow(2, attempt), 4000);
-        console.warn(`[LLM] Retry ${attempt + 1}/${retries} after ${delay}ms`);
-        await new Promise(r => setTimeout(r, delay));
+        if (parsed) {
+          // Record success in performance tracker
+          modelManager.getPerformanceTracker().recordSuccess(modelId, latency);
+          console.log(`[LLM] Success with model: ${modelId} (${latency}ms)`);
+          return parsed;
+        }
+
+        lastError = new Error('Failed to parse LLM response');
+        console.warn(`[LLM] Model ${modelId} returned unparseable response, retrying...`);
+      } catch (err) {
+        const latency = Date.now() - start;
+        lastError = err;
+        modelManager.getPerformanceTracker().recordFailure(modelId, err);
+        console.warn(`[LLM] Model ${modelId} failed after ${latency}ms: ${err.message}`);
+
+        if (attempt < 2) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), 4000);
+          console.warn(`[LLM] Retry ${attempt + 1}/2 for ${modelId} after ${delay}ms`);
+          await new Promise(r => setTimeout(r, delay));
+        }
       }
     }
+
+    // If fallback is disabled, don't try next model
+    if (!modelManager.fallbackEnabled) break;
   }
 
-  throw lastError || new Error('LLM query failed after retries');
+  // All models exhausted
+  const error = lastError || new Error('All Groq models failed after exhausting retries');
+  error.modelsAttempted = modelsAttempted;
+  throw error;
 }
 
 // ═══════════════════════════════════════════════════════════════
 //  STRUCTURED OUTPUT PARSER with validation
 // ═══════════════════════════════════════════════════════════════
 
-function parseLLMResponse(raw) {
+function parseLLMResponse(raw, modelId) {
   // Remove markdown code fences
   let clean = raw.replace(/```json|```javascript|```/g, '').trim();
 
@@ -183,7 +211,7 @@ function parseLLMResponse(raw) {
   }
 
   // Validate required fields
-  const score = typeof parsed.score === 'number' ? clamp(Math.round(parsed.score), 0, 100) : 
+  const score = typeof parsed.score === 'number' ? clamp(Math.round(parsed.score), 0, 100) :
                 typeof parsed.score === 'string' ? clamp(parseInt(parsed.score) || 50, 0, 100) : 50;
 
   const verdict = ['SAFE', 'SUSPICIOUS', 'SCAM'].includes(parsed.verdict) ? parsed.verdict : calculateVerdict(score);
@@ -200,7 +228,7 @@ function parseLLMResponse(raw) {
       confidence: ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : 'medium',
       recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations.slice(0, 5) : [],
       aiProvider: 'groq',
-      aiModel: 'llama-3.3-70b-versatile',
+      aiModel: modelId || 'unknown'
     }
   };
 }
@@ -320,7 +348,7 @@ function fallbackAnalysis(data) {
   }
 
   // ── Scam phrases ─────────────────────────────────────────────
-  const scamPatterns = ['win', 'winner', 'prize', 'lottery', 'inheritance', 
+  const scamPatterns = ['win', 'winner', 'prize', 'lottery', 'inheritance',
     'guaranteed', 'cryptocurrency', 'bitcoin', 'wire transfer', 'money gram',
     'western union', 'gift card', 'nigerian', 'fee required'];
   const foundScam = scamPatterns.filter(p => text.includes(p));
@@ -403,7 +431,7 @@ function buildFallbackRecommendations(score) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  SYSTEM PROMPT (unchanged logic from original)
+//  SYSTEM PROMPT — with false-positive prevention
 // ═══════════════════════════════════════════════════════════════
 
 function buildSystemPrompt(data) {
@@ -437,7 +465,7 @@ FALSE-POSITIVE PREVENTION RULES (CRITICAL):
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  USER PROMPT (same as original)
+//  USER PROMPT
 // ═══════════════════════════════════════════════════════════════
 
 function buildAdvancedPrompt(data) {
@@ -490,6 +518,7 @@ CONTENT ANALYSIS
 ══════════════════════════════════════════════════════════════
 Reviews: ${data.reviewCount || 0} found
 ${reviewSample !== 'None found' ? `Samples:\n- ${reviewSample}` : 'No reviews'}
+
 Prices: ${prices}
 Form Fields: ${formFields}
 Dark Patterns: ${darkPatterns}
@@ -606,4 +635,9 @@ function clamp(val, min, max) {
   return Math.min(Math.max(val, min), max);
 }
 
-module.exports = { analyzeWithAI, getCacheStats };
+module.exports = {
+  analyzeWithAI,
+  getCacheStats,
+  modelManager,
+  getModelSummary: () => modelManager.summarize()
+};
