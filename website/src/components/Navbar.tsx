@@ -4,10 +4,12 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
 const navLinks = [
+  { label: 'Demo', href: '#demo' },
   { label: 'Features', href: '#features' },
   { label: 'How It Works', href: '#how-it-works' },
   { label: 'Pricing', href: '#pricing' },
   { label: 'FAQ', href: '#faq' },
+  { label: 'Contact', href: '#contact' },
 ]
 
 export default function Navbar() {
@@ -60,6 +62,9 @@ export default function Navbar() {
             <Link href="/docs" className="text-xs text-neutral-400 hover:text-white transition-colors">
               Docs
             </Link>
+            <Link href="/blog" className="text-xs text-neutral-400 hover:text-white transition-colors">
+              Blog
+            </Link>
             <a href="#pricing" className="btn-accent text-xs py-2 px-4">
               Add to Chrome
             </a>
@@ -103,6 +108,13 @@ export default function Navbar() {
                 className="px-3 py-2.5 rounded text-sm text-neutral-400 hover:text-white hover:bg-surface-3 transition-colors"
               >
                 Docs
+              </Link>
+              <Link
+                href="/blog"
+                onClick={() => setMobileOpen(false)}
+                className="px-3 py-2.5 rounded text-sm text-neutral-400 hover:text-white hover:bg-surface-3 transition-colors"
+              >
+                Blog
               </Link>
               <div className="pt-2 px-3">
                 <a href="#pricing" onClick={() => setMobileOpen(false)} className="btn-accent text-sm w-full">

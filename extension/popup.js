@@ -1,16 +1,21 @@
 // ============================================================
 //  Is This Legit? — popup.js
-//  Redesigned popup with light/dark theme, history, details
+//  UPGRADED: collapsible panels, whitelist/blacklist UI,
+//  settings management, false reporting, history search/filter,
+//  IndexedDB integration, threat breakdown bars
 // ============================================================
 
 let currentTabId = null;
 let highlightsActive = false;
 let lastResult = null;
 let scanHistory = [];
+let whitelistData = [];
+let blacklistData = [];
+let settingsData = {};
 
 const STORAGE_KEY = 'itl_scan_history';
 const THEME_KEY = 'itl_theme';
-const MAX_HISTORY = 50;
+const MAX_HISTORY = 100;
 
 // ========== Theme Management ==========
 
@@ -26,23 +31,17 @@ function applyTheme(theme) {
 function updateThemeIcon(theme) {
   const icon = document.getElementById('themeIcon');
   if (!icon) return;
-
-  // Clear existing content
   while (icon.firstChild) icon.removeChild(icon.firstChild);
 
   const svgNS = 'http://www.w3.org/2000/svg';
-
   if (theme === 'dark') {
-    // Moon icon
     const path = document.createElementNS(svgNS, 'path');
     path.setAttribute('d', 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z');
     icon.appendChild(path);
   } else {
-    // Sun icon
     const circle = document.createElementNS(svgNS, 'circle');
     circle.setAttribute('cx', '12'); circle.setAttribute('cy', '12'); circle.setAttribute('r', '5');
     icon.appendChild(circle);
-
     const lines = [
       ['12','1','12','3'], ['12','21','12','23'],
       ['4.22','4.22','5.64','5.64'], ['18.36','18.36','19.78','19.78'],
@@ -77,52 +76,22 @@ async function toggleTheme() {
   });
 }
 
-// ========== Settings ==========
-
-const SETTINGS_KEYS = { apiKey: 'itl_api_key', backendUrl: 'itl_backend_url' };
-
-async function loadSettings() {
-  const data = await new Promise(resolve => {
-    chrome.storage.local.get([SETTINGS_KEYS.apiKey, SETTINGS_KEYS.backendUrl], resolve);
-  });
-  
-  if (data[SETTINGS_KEYS.backendUrl]) {
-    document.getElementById('settingBackendUrl').value = data[SETTINGS_KEYS.backendUrl];
-  }
-  if (data[SETTINGS_KEYS.apiKey]) {
-    document.getElementById('settingApiKey').value = data[SETTINGS_KEYS.apiKey];
-  }
-}
-
-async function saveSettings() {
-  const backendUrl = document.getElementById('settingBackendUrl').value.trim();
-  const apiKey = document.getElementById('settingApiKey').value.trim();
-  
-  await new Promise(resolve => {
-    chrome.storage.local.set({
-      [SETTINGS_KEYS.backendUrl]: backendUrl,
-      [SETTINGS_KEYS.apiKey]: apiKey
-    }, resolve);
-  });
-  
-  const savedMsg = document.getElementById('settingsSaved');
-  savedMsg.style.display = 'block';
-  setTimeout(() => { savedMsg.style.display = 'none'; }, 2000);
-}
-
 // ========== Initialization ==========
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Load theme first for instant render
   await loadTheme();
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) return;
 
   currentTabId = tab.id;
-  loadHistory();
-
   document.getElementById('currentUrl').textContent = tab.url || 'Unknown';
+
+  await loadHistory();
+  await loadWhitelist();
+  await loadBlacklist();
+  await loadSettingsData();
+  await loadSettingsUI();
 
   const cached = await getCachedResult(tab.id, tab.url);
   if (cached) {
@@ -130,36 +99,334 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderResult(cached);
     } catch (renderErr) {
       console.error('[Popup] Cached render error:', renderErr);
-      showError('Failed to display cached results.');
     }
   }
 
-  // Event listeners
+  // ── Event Listeners ──
   document.getElementById('scanBtn').addEventListener('click', startScan);
   document.getElementById('rescanBtn')?.addEventListener('click', startScan);
   document.getElementById('highlightBtn')?.addEventListener('click', toggleHighlights);
   document.getElementById('clearHistoryBtn')?.addEventListener('click', clearHistory);
   document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
-  document.getElementById('saveSettingsBtn')?.addEventListener('click', saveSettings);
-  document.getElementById('getApiKeyLink')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    chrome.tabs.create({ url: 'https://console.groq.com' });
+
+  // Settings
+  document.getElementById('saveApiSettings')?.addEventListener('click', saveApiSettings);
+  document.getElementById('saveGeneralSettings')?.addEventListener('click', saveGeneralSettings);
+
+  // Whitelist/Blacklist
+  document.getElementById('addWhitelistBtn')?.addEventListener('click', () => addDomain('whitelist'));
+  document.getElementById('addBlacklistBtn')?.addEventListener('click', () => addDomain('blacklist'));
+
+  // History search/filter
+  document.getElementById('historySearchInput')?.addEventListener('input', renderHistory);
+  document.getElementById('historySearchClear')?.addEventListener('click', () => {
+    document.getElementById('historySearchInput').value = '';
+    renderHistory();
   });
 
+  // Filter chips
+  document.querySelectorAll('.filter-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      renderHistory();
+    });
+  });
+
+  // Settings tabs
+  document.querySelectorAll('.settings-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.settings-content').forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.settingsTab).classList.add('active');
+    });
+  });
+
+  // Collapsible panels
+  document.querySelectorAll('.collapsible-header').forEach(header => {
+    header.addEventListener('click', () => {
+      const parent = header.parentElement;
+      parent.classList.toggle('open');
+    });
+  });
+
+  // Severity slider
+  const slider = document.getElementById('severitySlider');
+  const sliderVal = document.getElementById('severityValue');
+  if (slider && sliderVal) {
+    slider.addEventListener('input', () => {
+      sliderVal.textContent = slider.value;
+    });
+  }
+
+  // Toggle switches
+  document.querySelectorAll('.toggle-switch').forEach(toggle => {
+    toggle.addEventListener('click', () => {
+      toggle.classList.toggle('active');
+    });
+  });
+
+  // Feedback buttons
+  document.getElementById('reportFalsePositiveBtn')?.addEventListener('click', () => reportFeedback('false_positive'));
+  document.getElementById('reportFalseNegativeBtn')?.addEventListener('click', () => reportFeedback('false_negative'));
+
+  // Navigation
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => switchPanel(btn.dataset.target));
   });
 
-  loadSettings();
+  // Keyboard shortcut: Enter in whitelist/blacklist input
+  document.getElementById('whitelistInput')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addDomain('whitelist');
+  });
+  document.getElementById('blacklistInput')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addDomain('blacklist');
+  });
 });
+
+// ========== Settings Persistence ==========
+
+async function loadSettingsData() {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
+    if (response?.success) {
+      settingsData = response.settings;
+    }
+  } catch (err) {
+    console.error('[Popup] Load settings error:', err);
+  }
+}
+
+async function loadSettingsUI() {
+  // API settings
+  const data = await new Promise(resolve => {
+    chrome.storage.local.get(['itl_backend_url', 'itl_api_key'], resolve);
+  });
+  if (data.itl_backend_url) document.getElementById('settingBackendUrl').value = data.itl_backend_url;
+  if (data.itl_api_key) document.getElementById('settingApiKey').value = data.itl_api_key;
+
+  // Severity threshold
+  const threshold = settingsData.severityThreshold || 40;
+  const slider = document.getElementById('severitySlider');
+  const sliderVal = document.getElementById('severityValue');
+  if (slider) slider.value = threshold;
+  if (sliderVal) sliderVal.textContent = threshold;
+
+  // Auto-scan toggle
+  const autoScan = settingsData.autoScan !== false;
+  const autoToggle = document.getElementById('autoScanToggle');
+  if (autoToggle) autoToggle.classList.toggle('active', autoScan);
+
+  // Notifications toggle
+  const showNotifs = settingsData.showNotifications !== false;
+  const notifToggle = document.getElementById('notificationsToggle');
+  if (notifToggle) notifToggle.classList.toggle('active', showNotifs);
+}
+
+async function saveApiSettings() {
+  const backendUrl = document.getElementById('settingBackendUrl').value.trim();
+  const apiKey = document.getElementById('settingApiKey').value.trim();
+
+  await chrome.runtime.sendMessage({
+    type: 'SAVE_SETTINGS',
+    settings: { backendUrl, apiKey }
+  });
+
+  const savedMsg = document.getElementById('settingsSaved');
+  savedMsg.style.display = 'block';
+  setTimeout(() => { savedMsg.style.display = 'none'; }, 2000);
+}
+
+async function saveGeneralSettings() {
+  const severityThreshold = parseInt(document.getElementById('severitySlider').value) || 40;
+  const autoScan = document.getElementById('autoScanToggle').classList.contains('active');
+  const showNotifications = document.getElementById('notificationsToggle').classList.contains('active');
+
+  await chrome.runtime.sendMessage({
+    type: 'SAVE_SETTINGS',
+    settings: { severityThreshold, autoScan, showNotifications }
+  });
+
+  updateFooter('Settings saved', '#22c55e');
+  setTimeout(() => updateFooter('Ready', ''), 2000);
+}
+
+// ========== Whitelist/Blacklist Management ==========
+
+async function loadWhitelist() {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'GET_WHITELIST' });
+    if (response?.success) {
+      whitelistData = response.list || [];
+      renderWhitelist();
+    }
+  } catch (err) {
+    console.error('[Popup] Load whitelist error:', err);
+  }
+}
+
+async function loadBlacklist() {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'GET_BLACKLIST' });
+    if (response?.success) {
+      blacklistData = response.list || [];
+      renderBlacklist();
+    }
+  } catch (err) {
+    console.error('[Popup] Load blacklist error:', err);
+  }
+}
+
+function renderWhitelist() {
+  const container = document.getElementById('whitelistList');
+  if (!container) return;
+  container.innerHTML = '';
+  if (whitelistData.length === 0) {
+    container.innerHTML = '<div class="text-muted" style="font-size:11px;padding:4px 0;">No whitelisted domains</div>';
+    return;
+  }
+  whitelistData.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `<span>${item.domain}</span><span class="remove-btn" data-domain="${item.domain}" data-list="whitelist">&times;</span>`;
+    container.appendChild(div);
+  });
+  container.querySelectorAll('.remove-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      removeDomain(btn.dataset.list, btn.dataset.domain);
+    });
+  });
+}
+
+function renderBlacklist() {
+  const container = document.getElementById('blacklistList');
+  if (!container) return;
+  container.innerHTML = '';
+  if (blacklistData.length === 0) {
+    container.innerHTML = '<div class="text-muted" style="font-size:11px;padding:4px 0;">No blacklisted domains</div>';
+    return;
+  }
+  blacklistData.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `<span>${item.domain}</span><span class="remove-btn" data-domain="${item.domain}" data-list="blacklist">&times;</span>`;
+    container.appendChild(div);
+  });
+  container.querySelectorAll('.remove-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      removeDomain(btn.dataset.list, btn.dataset.domain);
+    });
+  });
+}
+
+async function addDomain(listType) {
+  const inputId = listType === 'whitelist' ? 'whitelistInput' : 'blacklistInput';
+  const input = document.getElementById(inputId);
+  const domain = input.value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  if (!domain) return;
+
+  const msgType = listType === 'whitelist' ? 'ADD_WHITELIST' : 'ADD_BLACKLIST';
+  await chrome.runtime.sendMessage({ type: msgType, domain });
+
+  input.value = '';
+  if (listType === 'whitelist') {
+    await loadWhitelist();
+  } else {
+    await loadBlacklist();
+  }
+  updateFooter(`Added to ${listType}: ${domain}`, '#22c55e');
+  setTimeout(() => updateFooter('Ready', ''), 2000);
+}
+
+async function removeDomain(listType, domain) {
+  const msgType = listType === 'whitelist' ? 'REMOVE_WHITELIST' : 'REMOVE_BLACKLIST';
+  await chrome.runtime.sendMessage({ type: msgType, domain });
+
+  if (listType === 'whitelist') {
+    await loadWhitelist();
+  } else {
+    await loadBlacklist();
+  }
+  updateFooter(`Removed from ${listType}: ${domain}`, '#f59e0b');
+  setTimeout(() => updateFooter('Ready', ''), 2000);
+}
+
+// ========== Feedback Reporting ==========
+
+async function reportFeedback(type) {
+  if (!lastResult) {
+    updateFooter('Scan a page first to report feedback', '#ef4444');
+    setTimeout(() => updateFooter('Ready', ''), 2000);
+    return;
+  }
+
+  const expectedVerdict = type === 'false_positive' ? 'SAFE' : 'SCAM';
+
+  try {
+    await chrome.runtime.sendMessage({
+      type: type === 'false_positive' ? 'REPORT_FALSE_POSITIVE' : 'REPORT_FALSE_NEGATIVE',
+      url: lastResult.url,
+      score: lastResult.score,
+      verdict: lastResult.verdict,
+      expectedVerdict
+    });
+    updateFooter(`${type === 'false_positive' ? 'False positive' : 'False negative'} reported. Thank you!`, '#22c55e');
+    setTimeout(() => updateFooter('Ready', ''), 3000);
+  } catch (err) {
+    console.error('[Popup] Feedback error:', err);
+    updateFooter('Failed to submit report', '#ef4444');
+    setTimeout(() => updateFooter('Ready', ''), 2000);
+  }
+}
 
 // ========== History ==========
 
 async function loadHistory() {
-  const data = await new Promise(resolve => {
-    chrome.storage.local.get([STORAGE_KEY], r => resolve(r[STORAGE_KEY] || []));
-  });
-  scanHistory = data;
+  try {
+    // Load from both IndexedDB (via background) and local storage
+    const response = await chrome.runtime.sendMessage({ type: 'GET_REPORTS' });
+    if (response?.success && response.reports) {
+      scanHistory = response.reports.map(r => ({
+        url: r.url,
+        score: r.score,
+        verdict: r.verdict,
+        flags: r.flags || [],
+        summary: r.summary || '',
+        timestamp: r.timestamp || Date.now()
+      }));
+    }
+
+    // Also merge with local storage history
+    const localData = await new Promise(resolve => {
+      chrome.storage.local.get([STORAGE_KEY], r => resolve(r[STORAGE_KEY] || []));
+    });
+
+    // Merge and deduplicate
+    const urlSet = new Set(scanHistory.map(h => h.url + h.timestamp));
+    localData.forEach(item => {
+      const key = item.url + item.timestamp;
+      if (!urlSet.has(key)) {
+        scanHistory.push(item);
+        urlSet.add(key);
+      }
+    });
+
+    // Sort by timestamp descending
+    scanHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // Limit
+    if (scanHistory.length > MAX_HISTORY) {
+      scanHistory = scanHistory.slice(0, MAX_HISTORY);
+    }
+  } catch (err) {
+    console.error('[Popup] Load history error:', err);
+    // Fallback to local storage
+    const data = await new Promise(resolve => {
+      chrome.storage.local.get([STORAGE_KEY], r => resolve(r[STORAGE_KEY] || []));
+    });
+    scanHistory = data;
+  }
 }
 
 async function saveToHistory(result) {
@@ -167,8 +434,8 @@ async function saveToHistory(result) {
     url: result.url,
     score: result.score,
     verdict: result.verdict,
-    flags: result.flags,
-    summary: result.summary,
+    flags: result.flags || [],
+    summary: result.summary || '',
     timestamp: result.scanTimestamp || new Date().toISOString()
   };
 
@@ -196,6 +463,10 @@ function switchPanel(panelId) {
 
   if (panelId === 'panel-history') renderHistory();
   if (panelId === 'panel-details') renderDetails();
+  if (panelId === 'panel-settings') {
+    loadWhitelist();
+    loadBlacklist();
+  }
 }
 
 // ========== History Rendering ==========
@@ -204,46 +475,58 @@ function renderHistory() {
   const container = document.getElementById('historyList');
   container.textContent = '';
 
-  if (scanHistory.length === 0) {
+  const query = (document.getElementById('historySearchInput')?.value || '').toLowerCase();
+  const activeFilter = document.querySelector('.filter-chip.active');
+  const filter = activeFilter ? activeFilter.dataset.filter : 'all';
+
+  let filtered = scanHistory;
+
+  // Apply filter
+  if (filter !== 'all') {
+    filtered = filtered.filter(item => item.verdict === filter);
+  }
+
+  // Apply search
+  if (query) {
+    filtered = filtered.filter(item =>
+      (item.url || '').toLowerCase().includes(query) ||
+      (item.summary || '').toLowerCase().includes(query) ||
+      (item.flags || []).some(f => f.toLowerCase().includes(query))
+    );
+  }
+
+  if (filtered.length === 0) {
     const emptyDiv = document.createElement('div');
     emptyDiv.className = 'history-empty';
-    const iconDiv = document.createElement('div');
-    iconDiv.className = 'history-empty-icon';
-    iconDiv.textContent = '\u{1F50D}';
-    emptyDiv.appendChild(iconDiv);
-    emptyDiv.appendChild(document.createTextNode('No scan history yet'));
+    emptyDiv.innerHTML = `<div class="history-empty-icon">&#128269;</div>${query ? 'No results for "' + query + '"' : 'No scan history yet'}`;
     container.appendChild(emptyDiv);
     return;
   }
 
-  scanHistory.forEach((item) => {
+  filtered.forEach((item) => {
     const div = document.createElement('div');
-    div.className = 'history-item';
+    div.className = 'history-item fade-in';
 
     const color = item.verdict === 'SAFE'
-      ? 'var(--safe)'
-      : item.verdict === 'SUSPICIOUS'
-        ? 'var(--warn)'
-        : 'var(--danger)';
-
-    const iconSvg = createVerdictIcon(item.verdict);
+      ? 'var(--safe)' : item.verdict === 'SUSPICIOUS'
+        ? 'var(--warn)' : 'var(--danger)';
 
     const scoreDiv = document.createElement('div');
     scoreDiv.className = 'history-score';
     scoreDiv.style.color = color;
-    scoreDiv.appendChild(iconSvg);
-    scoreDiv.appendChild(document.createTextNode(' ' + item.score));
+    scoreDiv.textContent = item.score || '--';
 
     const infoDiv = document.createElement('div');
     infoDiv.className = 'history-info';
 
     const urlDiv = document.createElement('div');
     urlDiv.className = 'history-url';
-    urlDiv.textContent = (item.url || '').replace(/^https?:\/\//, '').slice(0, 40);
+    urlDiv.textContent = (item.url || '').replace(/^https?:\/\//, '').slice(0, 45);
 
     const timeDiv = document.createElement('div');
     timeDiv.className = 'history-time';
-    timeDiv.textContent = new Date(item.timestamp).toLocaleString();
+    const ts = item.timestamp ? new Date(item.timestamp) : new Date();
+    timeDiv.textContent = ts.toLocaleString();
 
     infoDiv.appendChild(urlDiv);
     infoDiv.appendChild(timeDiv);
@@ -269,6 +552,8 @@ function clearHistory() {
   scanHistory = [];
   chrome.storage.local.set({ [STORAGE_KEY]: [] });
   renderHistory();
+  updateFooter('History cleared', '#22c55e');
+  setTimeout(() => updateFooter('Ready', ''), 2000);
 }
 
 // ========== Details Rendering ==========
@@ -278,21 +563,14 @@ function renderDetails() {
   container.innerHTML = '';
 
   if (!lastResult) {
-    const emptyDiv = document.createElement('div');
-    emptyDiv.className = 'history-empty';
-    const iconDiv = document.createElement('div');
-    iconDiv.className = 'history-empty-icon';
-    iconDiv.textContent = '\u{1F4C4}';
-    emptyDiv.appendChild(iconDiv);
-    emptyDiv.appendChild(document.createTextNode('Run a scan to see details'));
-    container.appendChild(emptyDiv);
+    container.innerHTML = '<div class="history-empty"><div class="history-empty-icon">&#128196;</div>Run a scan to see details</div>';
     return;
   }
 
   const d = lastResult.details || {};
 
-  // ── Domain Information section ──
-  const domainSection = createDetailSection('Domain Information', createSvgIcon('search'));
+  // Domain Information
+  const domainSection = createDetailSection('Domain Information', 'search');
   if (lastResult.domainCreated) {
     const createdDate = new Date(lastResult.domainCreated);
     if (!isNaN(createdDate.getTime())) {
@@ -304,83 +582,64 @@ function renderDetails() {
   } else {
     domainSection.appendChild(createDetailItem('Domain Age', 'Unknown'));
   }
-  if (lastResult.registrar) {
-    domainSection.appendChild(createDetailItem('Registrar', lastResult.registrar));
-  }
-  if (lastResult.registrantOrg) {
-    domainSection.appendChild(createDetailItem('Organization', lastResult.registrantOrg));
-  }
+  if (lastResult.registrar) domainSection.appendChild(createDetailItem('Registrar', lastResult.registrar));
+  if (lastResult.registrantOrg) domainSection.appendChild(createDetailItem('Organization', lastResult.registrantOrg));
   domainSection.appendChild(createDetailItem('SSL', lastResult.hasSSL ? 'Secure (HTTPS)' : 'No SSL'));
-  if (lastResult.isPhishing) {
-    domainSection.appendChild(createDetailItem('Threat DB', 'FLAGGED', 'risk'));
-  } else {
-    domainSection.appendChild(createDetailItem('Threat DB', 'Clean'));
-  }
+  domainSection.appendChild(createDetailItem('Threat DB', lastResult.isPhishing ? 'FLAGGED' : 'Clean', lastResult.isPhishing ? 'risk' : ''));
   container.appendChild(domainSection);
 
-  // ── Risk Analysis section ──
-  const riskSection = createDetailSection('Risk Analysis', createSvgIcon('upload'));
-  riskSection.appendChild(createDetailItem('Confidence', d.confidence || 'N/A'));
+  // Risk Analysis
+  const riskSection = createDetailSection('Risk Analysis', 'upload');
+  if (d.confidence) riskSection.appendChild(createDetailItem('Confidence', d.confidence));
+  if (d.modelVersion) riskSection.appendChild(createDetailItem('Model', d.modelVersion));
   container.appendChild(riskSection);
 
-  // ── Risk Factors section ──
+  // Risk Factors
   if (d.riskFactors?.length) {
-    const rfSection = createDetailSection('Risk Factors', createSvgIcon('alert'));
-    d.riskFactors.forEach(f => {
-      rfSection.appendChild(createDetailItem('', f, 'risk'));
-    });
+    const rfSection = createDetailSection('Risk Factors', 'alert');
+    d.riskFactors.forEach(f => rfSection.appendChild(createDetailItem('', f, 'risk')));
     container.appendChild(rfSection);
   }
 
-  // ── Positive Signals section ──
+  // Positive Signals
   if (d.positiveSignals?.length) {
-    const psSection = createDetailSection('Positive Signals', createSvgIcon('check'));
-    d.positiveSignals.forEach(s => {
-      psSection.appendChild(createDetailItem('', s, 'positive'));
-    });
+    const psSection = createDetailSection('Positive Signals', 'check');
+    d.positiveSignals.forEach(s => psSection.appendChild(createDetailItem('', s, 'positive')));
     container.appendChild(psSection);
   }
 
-  // ── Recommendations section ──
+  // Recommendations
   if (d.recommendations?.length) {
-    const recSection = createDetailSection('Recommendations', createSvgIcon('info'));
-    d.recommendations.forEach(r => {
-      recSection.appendChild(createDetailItem('', r));
-    });
+    const recSection = createDetailSection('Recommendations', 'info');
+    d.recommendations.forEach(r => recSection.appendChild(createDetailItem('', r)));
     container.appendChild(recSection);
   }
 
-  // ── Scan Metadata section ──
-  const metaSection = createDetailSection('Scan Metadata', createSvgIcon('search'));
+  // Scan Metadata
+  const metaSection = createDetailSection('Scan Metadata', 'search');
   metaSection.appendChild(createDetailItem('URL', lastResult.url || '--', 'url'));
   metaSection.appendChild(createDetailItem('Analysis time', (lastResult.analysisMs || 0) + 'ms'));
-  metaSection.appendChild(createDetailItem('Scanned', new Date(lastResult.scanTimestamp).toLocaleString()));
+  metaSection.appendChild(createDetailItem('Scanned', lastResult.scanTimestamp ? new Date(lastResult.scanTimestamp).toLocaleString() : '--'));
   container.appendChild(metaSection);
 }
 
-// ── Safe DOM helpers for details ─────────────────────────────
-
-function createDetailSection(title, iconEl) {
+function createDetailSection(title, iconType) {
   const section = document.createElement('div');
   section.className = 'detail-section';
-
   const titleDiv = document.createElement('div');
   titleDiv.className = 'detail-title';
-  if (iconEl) titleDiv.appendChild(iconEl);
+  titleDiv.appendChild(createSvgIcon(iconType));
   titleDiv.appendChild(document.createTextNode(' ' + title));
   section.appendChild(titleDiv);
-
   return section;
 }
 
 function createDetailItem(label, value, extraClass) {
   const item = document.createElement('div');
   item.className = 'detail-item' + (extraClass ? ' ' + extraClass : '');
-
   const labelSpan = document.createElement('span');
   labelSpan.textContent = label;
   item.appendChild(labelSpan);
-
   const valueSpan = document.createElement('span');
   if (extraClass !== 'url') {
     valueSpan.textContent = value;
@@ -389,88 +648,35 @@ function createDetailItem(label, value, extraClass) {
     valueSpan.textContent = value;
   }
   item.appendChild(valueSpan);
-
   return item;
 }
 
 function createSvgIcon(type) {
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
-  svg.setAttribute('width', '14');
-  svg.setAttribute('height', '14');
+  svg.setAttribute('width', '14'); svg.setAttribute('height', '14');
   svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2');
 
-  if (type === 'upload') {
-    const path = document.createElementNS(svgNS, 'path');
-    path.setAttribute('d', 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4');
-    svg.appendChild(path);
-    const poly = document.createElementNS(svgNS, 'polyline');
-    poly.setAttribute('points', '17 8 12 3 7 8');
-    svg.appendChild(poly);
-    const line = document.createElementNS(svgNS, 'line');
-    line.setAttribute('x1', '12'); line.setAttribute('y1', '3');
-    line.setAttribute('x2', '12'); line.setAttribute('y2', '15');
-    svg.appendChild(line);
-  } else if (type === 'alert') {
-    const path = document.createElementNS(svgNS, 'path');
-    path.setAttribute('d', 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z');
-    svg.appendChild(path);
-    const l1 = document.createElementNS(svgNS, 'line');
-    l1.setAttribute('x1', '12'); l1.setAttribute('y1', '9');
-    l1.setAttribute('x2', '12'); l1.setAttribute('y2', '13');
-    svg.appendChild(l1);
-    const l2 = document.createElementNS(svgNS, 'line');
-    l2.setAttribute('x1', '12'); l2.setAttribute('y1', '17');
-    l2.setAttribute('x2', '12.01'); l2.setAttribute('y2', '17');
-    svg.appendChild(l2);
-  } else if (type === 'check') {
-    const poly = document.createElementNS(svgNS, 'polyline');
-    poly.setAttribute('points', '20 6 9 17 4 12');
-    svg.appendChild(poly);
-  } else if (type === 'info') {
-    const circle = document.createElementNS(svgNS, 'circle');
-    circle.setAttribute('cx', '12'); circle.setAttribute('cy', '12'); circle.setAttribute('r', '10');
-    svg.appendChild(circle);
-    const l1 = document.createElementNS(svgNS, 'line');
-    l1.setAttribute('x1', '12'); l1.setAttribute('y1', '16');
-    l1.setAttribute('x2', '12'); l1.setAttribute('y2', '12');
-    svg.appendChild(l1);
-    const l2 = document.createElementNS(svgNS, 'line');
-    l2.setAttribute('x1', '12'); l2.setAttribute('y1', '8');
-    l2.setAttribute('x2', '12.01'); l2.setAttribute('y2', '8');
-    svg.appendChild(l2);
-  } else if (type === 'search') {
-    const circle = document.createElementNS(svgNS, 'circle');
-    circle.setAttribute('cx', '11'); circle.setAttribute('cy', '11'); circle.setAttribute('r', '8');
-    svg.appendChild(circle);
-    const line = document.createElementNS(svgNS, 'line');
-    line.setAttribute('x1', '21'); line.setAttribute('y1', '21');
-    line.setAttribute('x2', '16.65'); line.setAttribute('y2', '16.65');
-    svg.appendChild(line);
-  } else if (type === 'x') {
-    svg.setAttribute('stroke-width', '3');
-    const circle = document.createElementNS(svgNS, 'circle');
-    circle.setAttribute('cx', '12'); circle.setAttribute('cy', '12'); circle.setAttribute('r', '10');
-    svg.appendChild(circle);
-    const l1 = document.createElementNS(svgNS, 'line');
-    l1.setAttribute('x1', '15'); l1.setAttribute('y1', '9');
-    l1.setAttribute('x2', '9'); l1.setAttribute('y2', '15');
-    svg.appendChild(l1);
-    const l2 = document.createElementNS(svgNS, 'line');
-    l2.setAttribute('x1', '9'); l2.setAttribute('y1', '9');
-    l2.setAttribute('x2', '15'); l2.setAttribute('y2', '15');
-    svg.appendChild(l2);
-  }
+  const paths = {
+    upload: [['path', { d: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' }], ['polyline', { points: '17 8 12 3 7 8' }], ['line', { x1: '12', y1: '3', x2: '12', y2: '15' }]],
+    alert: [['path', { d: 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z' }], ['line', { x1: '12', y1: '9', x2: '12', y2: '13' }], ['line', { x1: '12', y1: '17', x2: '12.01', y2: '17' }]],
+    check: [['polyline', { points: '20 6 9 17 4 12' }]],
+    info: [['circle', { cx: '12', cy: '12', r: '10' }], ['line', { x1: '12', y1: '16', x2: '12', y2: '12' }], ['line', { x1: '12', y1: '8', x2: '12.01', y2: '8' }]],
+    search: [['circle', { cx: '11', cy: '11', r: '8' }], ['line', { x1: '21', y1: '21', x2: '16.65', y2: '16.65' }]],
+    x: [['circle', { cx: '12', cy: '12', r: '10' }], ['line', { x1: '15', y1: '9', x2: '9', y2: '15' }], ['line', { x1: '9', y1: '9', x2: '15', y2: '15' }]]
+  };
+
+  const elements = paths[type] || paths.info;
+  elements.forEach(([tag, attrs]) => {
+    const el = document.createElementNS(svgNS, tag);
+    Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+    svg.appendChild(el);
+  });
 
   return svg;
 }
 
-/**
- * Creates an SVG verdict icon element (check, alert, or x) for history items
- */
 function createVerdictIcon(verdict) {
   if (verdict === 'SAFE') return createSvgIcon('check');
   if (verdict === 'SUSPICIOUS') return createSvgIcon('alert');
@@ -482,14 +688,7 @@ function createVerdictIcon(verdict) {
 async function startScan() {
   showLoading();
 
-  const steps = [
-    'Scraping page data...',
-    'Checking domain intel...',
-    'Querying PhishTank DB...',
-    'Running AI analysis...',
-    'Generating verdict...'
-  ];
-
+  const steps = ['Scraping page data...', 'Checking domain intel...', 'Querying PhishTank DB...', 'Running AI analysis...', 'Generating verdict...'];
   let stepIdx = 0;
   const stepEl = document.getElementById('loadingStep');
   const stepInterval = setInterval(() => {
@@ -507,40 +706,32 @@ async function startScan() {
       document.getElementById('loadingStep').textContent = 'Waiting for page to finish loading...';
       try {
         await waitForTabComplete(currentTabId, 20000);
-        response = await chrome.runtime.sendMessage({
-          type: 'ANALYZE_PAGE',
-          tabId: currentTabId
-        });
+        response = await chrome.runtime.sendMessage({ type: 'ANALYZE_PAGE', tabId: currentTabId });
       } catch {
-        response = { success: false, error: 'Page took too long to load. Refresh and try again.' };
+        response = { success: false, error: 'Page took too long to load.' };
       }
     }
 
     clearInterval(stepInterval);
-    console.log('[Popup] Response:', response);
 
     if (!response?.success) {
-      console.error('[Popup] Error:', response?.error);
-      showError(response?.error || 'Unknown error occurred');
+      showError(response?.error || 'Unknown error');
       return;
     }
 
     lastResult = response.result;
     await saveToHistory(response.result);
 
-    const trialNote = document.getElementById('trialNote');
-    if (trialNote) trialNote.style.display = 'none';
-
     try {
       renderResult(response.result);
     } catch (renderErr) {
       console.error('[Popup] Render error:', renderErr);
-      showError('Failed to display results. Please try scanning again.');
+      showError('Failed to display results.');
     }
 
   } catch (err) {
     clearInterval(stepInterval);
-    showError(err.message || 'Failed to connect to backend. Is the server running?');
+    showError(err.message || 'Failed to connect to backend.');
   }
 }
 
@@ -548,9 +739,8 @@ function waitForTabComplete(tabId, timeoutMs) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       chrome.tabs.onUpdated.removeListener(listener);
-      reject(new Error('Timeout waiting for tab to load'));
+      reject(new Error('Timeout'));
     }, timeoutMs);
-
     const listener = (updatedTabId, changeInfo) => {
       if (updatedTabId === tabId && changeInfo.status === 'complete') {
         clearTimeout(timeout);
@@ -558,7 +748,6 @@ function waitForTabComplete(tabId, timeoutMs) {
         resolve();
       }
     };
-
     chrome.tabs.onUpdated.addListener(listener);
   });
 }
@@ -571,15 +760,11 @@ function renderResult(result) {
 
   const { score, verdict, flags, summary, domainAge, isPhishing, hasSSL, reviewCount, details } = result;
 
-  // Score ring animation
+  // ── Score Ring ──
   const circle = document.getElementById('scoreCircle');
-  const circumference = 2 * Math.PI * 36; // r=36
+  const circumference = 2 * Math.PI * 34.5;
   const offset = circumference - (score / 100) * circumference;
-  const color = verdict === 'SAFE'
-    ? 'var(--safe)'
-    : verdict === 'SUSPICIOUS'
-      ? 'var(--warn)'
-      : 'var(--danger)';
+  const color = verdict === 'SAFE' ? 'var(--safe)' : verdict === 'SUSPICIOUS' ? 'var(--warn)' : 'var(--danger)';
 
   circle.style.stroke = color;
   setTimeout(() => { circle.style.strokeDashoffset = offset; }, 100);
@@ -588,13 +773,12 @@ function renderResult(result) {
   scoreEl.textContent = score;
   scoreEl.style.color = color;
 
-  // Verdict badge
+  // ── Verdict Badge ──
   const badge = document.getElementById('verdictBadge');
   badge.className = `verdict-badge ${verdict.toLowerCase()}`;
   badge.textContent = '';
   badge.appendChild(document.createTextNode(verdict + ' '));
 
-  // Confidence
   if (details?.confidence) {
     const span = document.createElement('span');
     span.id = 'confidenceLevel';
@@ -605,40 +789,41 @@ function renderResult(result) {
 
   document.getElementById('verdictSummary').textContent = summary || 'Analysis complete.';
 
+  // ── Issues Count ──
+  const issuesCount = document.getElementById('issuesCount');
+  if (issuesCount) {
+    const count = (flags || []).length;
+    issuesCount.textContent = count;
+    issuesCount.className = `count-badge ${count === 0 ? 'safe' : count <= 3 ? 'warn' : 'danger'}`;
+  }
+
+  // ── Render Flags ──
   renderFlags(flags || []);
 
-  // Domain intelligence
+  // ── Render Threat Breakdown ──
+  renderThreatBreakdown(result);
+
+  // ── Render Recommendations ──
+  renderRecommendations(result);
+
+  // ── Domain Intelligence ──
   const sslEl = document.getElementById('sslStatus');
   sslEl.textContent = hasSSL ? 'Secure' : 'No SSL';
   sslEl.style.color = hasSSL ? 'var(--safe)' : 'var(--danger)';
 
-  // Domain age — use domainCreated date for accurate calendar math
   const ageEl = document.getElementById('domainAge');
   const ageSubEl = document.getElementById('domainAgeSub');
-  const domainCreated = result.domainCreated;
 
-  if (domainCreated) {
-    const createdDate = new Date(domainCreated);
+  if (result.domainCreated) {
+    const createdDate = new Date(result.domainCreated);
     if (!isNaN(createdDate.getTime())) {
-      // Proper calendar-based age
-      const ageText = formatDomainAgeFromDate(createdDate);
-      ageEl.textContent = ageText;
-
-      // Show actual registration date below
+      ageEl.textContent = formatDomainAgeFromDate(createdDate);
       if (ageSubEl) {
         ageSubEl.textContent = createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         ageSubEl.style.display = 'block';
       }
-
-      // Color based on age in days
       const ageDays = domainAge || Math.floor((Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (ageDays < 30) {
-        ageEl.style.color = 'var(--danger)';
-      } else if (ageDays < 180) {
-        ageEl.style.color = 'var(--warn)';
-      } else {
-        ageEl.style.color = 'var(--safe)';
-      }
+      ageEl.style.color = ageDays < 30 ? 'var(--danger)' : ageDays < 180 ? 'var(--warn)' : 'var(--safe)';
     } else {
       ageEl.textContent = domainAge != null ? formatDomainAgeFallback(domainAge) : 'Unknown';
       ageEl.style.color = domainAge != null && domainAge >= 180 ? 'var(--safe)' : 'var(--text-muted)';
@@ -646,13 +831,7 @@ function renderResult(result) {
     }
   } else if (domainAge != null && domainAge >= 0) {
     ageEl.textContent = formatDomainAgeFallback(domainAge);
-    if (domainAge < 30) {
-      ageEl.style.color = 'var(--danger)';
-    } else if (domainAge < 180) {
-      ageEl.style.color = 'var(--warn)';
-    } else {
-      ageEl.style.color = 'var(--safe)';
-    }
+    ageEl.style.color = domainAge < 30 ? 'var(--danger)' : domainAge < 180 ? 'var(--warn)' : 'var(--safe)';
     if (ageSubEl) ageSubEl.style.display = 'none';
   } else {
     ageEl.textContent = 'Unknown';
@@ -660,7 +839,6 @@ function renderResult(result) {
     if (ageSubEl) ageSubEl.style.display = 'none';
   }
 
-  // Registrar
   const registrarEl = document.getElementById('registrarName');
   if (registrarEl) {
     registrarEl.textContent = result.registrar || 'Unknown';
@@ -673,23 +851,178 @@ function renderResult(result) {
 
   document.getElementById('reviewCount').textContent = reviewCount != null ? `${reviewCount} found` : '--';
 
+  // Ensure issues collapsible is open if there are issues
+  const issuesCollapse = document.getElementById('issuesCollapse');
+  if (issuesCollapse && flags && flags.length > 0) {
+    issuesCollapse.classList.add('open');
+  }
+
   lastResult = result;
   switchPanel('panel-scan');
+  updateFooter(`${verdict} — ${score}/100`, color);
 }
 
+// ── Threat Breakdown ──
+function renderThreatBreakdown(result) {
+  const container = document.getElementById('threatBreakdownBody');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const categories = [
+    { name: 'URL & Domain', score: calculateUrlRisk(result), max: 100 },
+    { name: 'Dark Patterns', score: calculateDarkPatternRisk(result), max: 100 },
+    { name: 'Content Signals', score: calculateContentRisk(result), max: 100 },
+    { name: 'Page Structure', score: calculateStructureRisk(result), max: 100 },
+    { name: 'Trust Signals', score: calculateTrustRisk(result), max: 100 }
+  ];
+
+  categories.forEach(cat => {
+    const wrap = document.createElement('div');
+    wrap.className = 'threat-bar-wrap';
+
+    const label = document.createElement('div');
+    label.className = 'threat-bar-label';
+    label.innerHTML = `<span class="name">${cat.name}</span><span class="score">${cat.score}%</span>`;
+    wrap.appendChild(label);
+
+    const track = document.createElement('div');
+    track.className = 'threat-bar-track';
+
+    const fill = document.createElement('div');
+    fill.className = 'threat-bar-fill';
+    const riskColor = cat.score < 30 ? 'var(--safe)' : cat.score < 60 ? 'var(--warn)' : 'var(--danger)';
+    fill.style.background = riskColor;
+    setTimeout(() => { fill.style.width = cat.score + '%'; }, 200);
+
+    track.appendChild(fill);
+    wrap.appendChild(track);
+    container.appendChild(wrap);
+  });
+
+  // Expand threat breakdown if risk is significant
+  const totalRisk = categories.reduce((s, c) => s + c.score, 0) / categories.length;
+  const collapse = document.getElementById('threatBreakdownCollapse');
+  if (collapse && totalRisk > 30) {
+    collapse.classList.add('open');
+  }
+}
+
+function calculateUrlRisk(result) {
+  const signals = result.details?.urlSignals || {};
+  let risk = 0;
+  if (signals.isIPAddress) risk += 30;
+  if (signals.hasAtSymbol) risk += 20;
+  if (signals.hasNonASCII) risk += 25;
+  if (signals.hasBase64) risk += 15;
+  if (signals.hasPhishyToken) risk += 20;
+  if (signals.longUrl) risk += 10;
+  if (signals.suspiciousParamCount > 1) risk += 15;
+  if (signals.subdomainCount > 3) risk += 10;
+  if (signals.hyphenCount > 2) risk += 10;
+  if (signals.digitCount > 3) risk += 10;
+  return Math.min(risk, 100);
+}
+
+function calculateDarkPatternRisk(result) {
+  const flags = result.flags || [];
+  const darkPatternFlags = flags.filter(f =>
+    f.toLowerCase().includes('countdown') || f.toLowerCase().includes('scarcity') ||
+    f.toLowerCase().includes('urgency') || f.toLowerCase().includes('guilt') ||
+    f.toLowerCase().includes('hidden') || f.toLowerCase().includes('deceptive') ||
+    f.toLowerCase().includes('fake') || f.toLowerCase().includes('misleading')
+  );
+  return Math.min(darkPatternFlags.length * 20, 100);
+}
+
+function calculateContentRisk(result) {
+  const signals = result.details?.contentSignals || {};
+  let risk = 0;
+  if (!signals.hasFavicon) risk += 10;
+  if (!signals.hasOpenGraph) risk += 15;
+  if (!signals.hasStructuredData) risk += 10;
+  if (!signals.hasCanonical) risk += 10;
+  if (!signals.hasCopyright) risk += 10;
+  if (!signals.hasPrivacyPolicy) risk += 15;
+  if (!signals.hasTerms) risk += 10;
+  if (signals.hiddenIframeCount > 0) risk += 15;
+  if (signals.hasCryptoMiner) risk += 30;
+  if (signals.hasMetaRefresh) risk += 15;
+  if (signals.externalScriptRatio > 0.7) risk += 15;
+  if (signals.capsRatio > 0.1) risk += 10;
+  return Math.min(risk, 100);
+}
+
+function calculateStructureRisk(result) {
+  const stats = result.details?.pageStats || {};
+  let risk = 0;
+  if (stats.iframes > 3) risk += 15;
+  if (stats.externalLinks > stats.totalLinks * 0.7) risk += 20;
+  if (stats.forms > 3) risk += 15;
+  if (!stats.hasLogin && stats.hasCheckout) risk += 15;
+  return Math.min(risk, 100);
+}
+
+function calculateTrustRisk(result) {
+  let risk = 0;
+  if (!result.hasSSL) risk += 30;
+  if (result.domainAge != null && result.domainAge < 30) risk += 25;
+  if (result.domainAge != null && result.domainAge < 90) risk += 15;
+  if (result.isPhishing) risk += 30;
+  const badges = result.details?.trustBadges || [];
+  if (badges.length === 0) risk += 10;
+  return Math.min(risk, 100);
+}
+
+// ── Recommendations ──
+function renderRecommendations(result) {
+  const container = document.getElementById('recommendationsBody');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const recs = [];
+  const { score, verdict, flags, hasSSL, domainAge, isPhishing, details } = result;
+
+  if (!hasSSL) recs.push('This site does not use HTTPS. Avoid entering sensitive information.');
+  if (isPhishing) recs.push('This domain has been flagged in phishing databases. Exercise extreme caution.');
+  if (domainAge != null && domainAge < 7) recs.push('This domain was registered less than a week ago. This is a common tactic for scam sites.');
+  if (domainAge != null && domainAge < 30) recs.push('This domain is very new (less than a month). Verify the site\'s legitimacy before proceeding.');
+  if (flags && flags.length > 0) {
+    if (flags.some(f => f.toLowerCase().includes('password'))) recs.push('Be cautious when entering passwords — the form may submit data to an untrusted server.');
+    if (flags.some(f => f.toLowerCase().includes('countdown'))) recs.push('Fake countdown timers are a common pressure tactic. Take your time to evaluate the offer.');
+    if (flags.some(f => f.toLowerCase().includes('crypto') || f.toLowerCase().includes('bitcoin'))) recs.push('Cryptocurrency-only payment options are often used by scam sites. Proceed with caution.');
+  }
+  if (score < 60) recs.push('Consider looking up independent reviews and verifying the company through external sources.');
+  if (score >= 80) recs.push('This site appears legitimate based on our analysis. Always use common sense.');
+
+  if (recs.length === 0) {
+    container.innerHTML = '<div class="text-muted" style="font-size:11px;">No recommendations for this page.</div>';
+  } else {
+    recs.forEach(r => {
+      const div = document.createElement('div');
+      div.style.cssText = 'padding:6px 8px; margin-bottom:4px; border-radius:6px; background:var(--bg-primary); border:1px solid var(--border); font-size:11px; line-height:1.4;';
+      div.textContent = '• ' + r;
+      container.appendChild(div);
+    });
+  }
+
+  // Open recommendations if there are significant risks
+  const collapse = document.getElementById('recommendationsCollapse');
+  if (collapse && recs.length > 1) {
+    collapse.classList.add('open');
+  }
+}
+
+// ── Flags Rendering ──
 function renderFlags(flags) {
   const container = document.getElementById('flagsList');
   container.textContent = '';
 
   if (!flags || flags.length === 0) {
-    const noFlags = document.createElement('div');
-    noFlags.className = 'no-flags';
-    noFlags.textContent = 'No issues detected on this page';
-    container.appendChild(noFlags);
+    container.innerHTML = '<div class="no-flags">No issues detected on this page</div>';
     return;
   }
 
-  const dangerKeywords = ['scam', 'phish', 'fake', 'fraud', 'malicious', 'spam'];
+  const dangerKeywords = ['scam', 'phish', 'fake', 'fraud', 'malicious', 'spam', 'password', 'credential'];
 
   flags.forEach((flag, i) => {
     const div = document.createElement('div');
@@ -697,13 +1030,9 @@ function renderFlags(flags) {
     div.className = `flag-item ${isDanger ? 'bad' : 'warn'} fade-in`;
     div.style.animationDelay = `${i * 0.04}s`;
 
-    const iconEl = isDanger ? createSvgIcon('x') : createSvgIcon('alert');
-    // Reset stroke-width for flag icons (x icon has stroke-width 3 from createSvgIcon)
-    if (!isDanger) iconEl.setAttribute('stroke-width', '2');
-
     const iconSpan = document.createElement('span');
     iconSpan.className = 'flag-icon';
-    iconSpan.appendChild(iconEl);
+    iconSpan.appendChild(isDanger ? createSvgIcon('x') : createSvgIcon('alert'));
 
     const textSpan = document.createElement('span');
     textSpan.className = 'flag-text';
@@ -728,7 +1057,8 @@ function toggleHighlights() {
     chrome.runtime.sendMessage({
       type: 'HIGHLIGHT_PAGE',
       tabId: currentTabId,
-      flags: lastResult?.flags || []
+      flags: lastResult?.flags || [],
+      fullResult: lastResult || null
     });
     btn.textContent = 'Clear Highlights';
     highlightsActive = true;
@@ -762,59 +1092,41 @@ function hideAll() {
   document.getElementById('scanBtn').disabled = false;
 }
 
-// ========== Cache ==========
+function updateFooter(text, color) {
+  const el = document.getElementById('footerStatus');
+  if (el) {
+    el.textContent = text;
+    if (color) el.style.color = color;
+  }
+}
 
-/**
- * Format domain age from a Date object using proper calendar math.
- * Returns strings like "28 years, 5 months" or "15 days".
- */
+// ========== Domain Age Helpers ==========
+
 function formatDomainAgeFromDate(created) {
   const now = new Date();
   let years = now.getFullYear() - created.getFullYear();
   let months = now.getMonth() - created.getMonth();
   let days = now.getDate() - created.getDate();
 
-  if (days < 0) {
-    months--;
-  }
-  if (months < 0) {
-    years--;
-    months += 12;
-  }
+  if (days < 0) months--;
+  if (months < 0) { years--; months += 12; }
 
-  if (years > 0 && months > 0) {
-    return `${years} yr${years !== 1 ? 's' : ''}, ${months} mo`;
-  }
-  if (years > 0) {
-    return `${years} year${years !== 1 ? 's' : ''}`;
-  }
-  if (months > 0) {
-    return `${months} month${months !== 1 ? 's' : ''}`;
-  }
+  if (years > 0 && months > 0) return `${years} yr${years !== 1 ? 's' : ''}, ${months} mo`;
+  if (years > 0) return `${years} year${years !== 1 ? 's' : ''}`;
+  if (months > 0) return `${months} month${months !== 1 ? 's' : ''}`;
   const totalDays = Math.floor((now - created) / (1000 * 60 * 60 * 24));
   if (totalDays === 0) return 'Today';
   return `${totalDays} day${totalDays !== 1 ? 's' : ''}`;
 }
 
-/**
- * Fallback: format domain age from raw day count (less accurate).
- * Used only when domainCreated date is not available.
- */
 function formatDomainAgeFallback(days) {
   if (days == null || days < 0) return 'Unknown';
   if (days === 0) return 'Today';
   if (days < 30) return `${days} day${days !== 1 ? 's' : ''}`;
-  if (days < 365) {
-    const months = Math.floor(days / 30);
-    return `${months} month${months !== 1 ? 's' : ''}`;
-  }
-  // Approximate with 365.25 for leap years
+  if (days < 365) return `${Math.floor(days / 30)} month${Math.floor(days / 30) !== 1 ? 's' : ''}`;
   const years = Math.floor(days / 365.25);
-  const remainDays = days - Math.floor(years * 365.25);
-  const remainMonths = Math.floor(remainDays / 30.44);
-  if (remainMonths > 0) {
-    return `${years} yr${years !== 1 ? 's' : ''}, ${remainMonths} mo`;
-  }
+  const remainMonths = Math.floor((days - years * 365.25) / 30.44);
+  if (remainMonths > 0) return `${years} yr${years !== 1 ? 's' : ''}, ${remainMonths} mo`;
   return `${years} year${years !== 1 ? 's' : ''}`;
 }
 

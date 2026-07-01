@@ -9,6 +9,7 @@ const router = express.Router();
 
 const { analyzeWithAI }          = require('../modules/llm');
 const { checkDomain }            = require('../modules/domain');
+const { computeThreatIntel }     = require('../modules/threat_intel');
 const { checkPhishTank }         = require('../modules/phishtank');
 const { checkSafeBrowsing }      = require('../modules/safebrowsing');
 const { checkUrlhaus, checkUrlhausHost } = require('../modules/urlhaus');
@@ -92,14 +93,40 @@ router.post('/analyze', async (req, res) => {
       analyzeWithAI(enrichedData)
     ]);
 
-    // ── 4. Composite scoring ────────────────────────────────────
+    // ── 4. Threat intelligence aggregation ──────────────────────
+    const threatIntel = computeThreatIntel(heuristicResult, {
+      ...enrichedData,
+      llmScore: aiResult.score,
+      aiProvider: aiResult.details?.aiProvider || 'groq',
+      heuristicScore: heuristicResult.score,
+      heuristicConfidence: heuristicResult.confidence,
+      signalCount: heuristicResult.signals?.length || 0,
+      heuristicSignals: heuristicResult.signals || [],
+      brandImpersonation: domain.brandImpersonation,
+      entropyAnalysis: domain.entropyAnalysis,
+      tldAnalysis: domain.tldAnalysis,
+      hasSensitiveFields: heuristicResult.signals?.some(s => s.name === 'form_types' && s.score < 30) || false,
+      urgencyDetected: heuristicResult.signals?.some(s => s.name === 'urgency_language' && s.score < 40) || false,
+      hasRedirectParams: heuristicResult.signals?.some(s => s.name === 'redirect_chains') || false,
+      suspiciousTLD: (domain.tldAnalysis?.risk === 'high' || domain.tldAnalysis?.risk === 'moderate') || false,
+    });
+
+    // ── 5. Composite scoring ────────────────────────────────────
     const compositeResult = computeCompositeScore(heuristicResult, aiResult, enrichedData);
 
     // ── 5. Merge flags ──────────────────────────────────────────
     const flags = buildFlagList(aiResult, enrichedData, domain, isPhishing, isMalicious, pageData);
 
+    // Add zero-day flags from threat intel
+    if (threatIntel.zeroDayPatterns.length > 0) {
+      for (const pattern of threatIntel.zeroDayPatterns) {
+        flags.push(`[Zero-Day] ${pattern.description} (${pattern.severity})`);
+      }
+    }
+
     // ── 6. Build response ───────────────────────────────────────
     const result = {
+      threatIntel,
       score: compositeResult.score,
       verdict: compositeResult.verdict,
       flags: [...new Set(flags)],

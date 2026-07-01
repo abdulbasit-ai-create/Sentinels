@@ -6,9 +6,7 @@
 <title>Is This Legit?</title>
 <style>
   /* ========== Theme Variables ========== */
-  :root {
-    --transition: 0.25s ease;
-  }
+  :root { --transition: 0.25s ease; }
 
   [data-theme="light"] {
     --bg-primary: #ffffff;
@@ -74,19 +72,18 @@
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
   html {
-    width: 380px !important;
-    max-width: 380px !important;
-    height: 560px !important;
-    max-height: 560px !important;
+    width: 420px !important;
+    max-width: 420px !important;
+    height: 600px !important;
+    max-height: 600px !important;
     overflow: hidden !important;
-    zoom: 1 !important;
   }
 
   body {
-    width: 380px !important;
-    max-width: 380px !important;
-    height: 560px !important;
-    max-height: 560px !important;
+    width: 420px !important;
+    max-width: 420px !important;
+    height: 600px !important;
+    max-height: 600px !important;
     margin: 0 !important;
     padding: 0 !important;
     background: var(--bg-primary);
@@ -96,15 +93,10 @@
     overflow: hidden !important;
     transition: background var(--transition), color var(--transition);
     -webkit-font-smoothing: antialiased;
-    zoom: 1 !important;
   }
 
-  /* Prevent anything from overflowing the popup */
-  *, *::before, *::after {
-    max-width: 380px;
-  }
+  *, *::before, *::after { max-width: 420px; }
 
-  /* Scrollbar */
   * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
   *::-webkit-scrollbar { width: 5px; }
   *::-webkit-scrollbar-track { background: transparent; }
@@ -112,10 +104,10 @@
 
   /* ========== Layout ========== */
   .app {
-    width: 380px;
-    max-width: 380px;
-    height: 560px;
-    max-height: 560px;
+    width: 420px;
+    max-width: 420px;
+    height: 600px;
+    max-height: 600px;
     display: grid;
     grid-template-rows: auto auto 1fr auto auto;
     overflow: hidden;
@@ -126,7 +118,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 16px 10px;
+    padding: 12px 16px 8px;
   }
 
   .header-left {
@@ -139,7 +131,7 @@
     width: 32px;
     height: 32px;
     border-radius: 8px;
-    background: var(--accent);
+    background: linear-gradient(135deg, var(--accent), #8b5cf6);
     display: grid;
     place-items: center;
     color: #fff;
@@ -169,25 +161,20 @@
     font-size: 16px;
     line-height: 1;
   }
-
-  .theme-toggle:hover {
-    border-color: var(--border-hover);
-    background: var(--bg-tertiary);
-  }
+  .theme-toggle:hover { border-color: var(--border-hover); background: var(--bg-tertiary); }
 
   /* ========== URL Bar ========== */
-  .topbar { padding: 0 16px 12px; }
+  .topbar { padding: 0 16px 10px; }
 
   .url-bar {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 12px;
+    padding: 8px 12px;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: 10px;
     transition: all var(--transition);
-    min-width: 0;
     overflow: hidden;
   }
 
@@ -199,7 +186,7 @@
   }
 
   .url-text {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-secondary);
     white-space: nowrap;
     overflow: hidden;
@@ -210,12 +197,12 @@
   }
 
   /* ========== Panels ========== */
-  .content { position: relative; overflow: hidden; min-width: 0; }
+  .content { position: relative; overflow: hidden; }
 
   .panel {
     position: absolute;
     inset: 0;
-    padding: 0 16px 14px;
+    padding: 0 16px 10px;
     overflow-y: auto;
     overflow-x: hidden;
     opacity: 0;
@@ -233,7 +220,7 @@
   /* ========== Scan Button ========== */
   .scan-btn {
     width: 100%;
-    padding: 13px 16px;
+    padding: 12px 16px;
     background: var(--accent);
     border: none;
     border-radius: 10px;
@@ -245,13 +232,7 @@
     transition: all var(--transition);
     box-shadow: var(--shadow-sm);
   }
-
-  .scan-btn:hover {
-    background: var(--accent-hover);
-    box-shadow: var(--shadow-md);
-    transform: translateY(-1px);
-  }
-
+  .scan-btn:hover { background: var(--accent-hover); box-shadow: var(--shadow-md); transform: translateY(-1px); }
   .scan-btn:active { transform: translateY(0); }
   .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 
@@ -261,99 +242,27 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 40px 24px;
+    padding: 32px 24px;
     text-align: center;
-    gap: 10px;
+    gap: 8px;
   }
+  .welcome-icon { color: var(--accent); opacity: 0.5; margin-bottom: 4px; }
+  .welcome-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+  .welcome-desc { font-size: 12px; color: var(--text-muted); line-height: 1.55; max-width: 280px; }
 
-  .welcome-icon {
-    color: var(--accent);
-    opacity: 0.5;
-    margin-bottom: 4px;
-  }
-
-  .welcome-title {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .welcome-desc {
-    font-size: 12px;
-    color: var(--text-muted);
-    line-height: 1.55;
-    max-width: 260px;
-  }
-
-  /* ========== Loading State ========== */
-  .loading {
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    padding: 48px 20px;
-    gap: 16px;
-  }
-
-  .spinner {
-    width: 36px;
-    height: 36px;
-    border: 3px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-  }
-
+  /* ========== Loading ========== */
+  .loading { display: none; flex-direction: column; align-items: center; padding: 40px 20px; gap: 14px; }
+  .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-
-  .loading-text {
-    font-size: 13px;
-    color: var(--text-secondary);
-    text-align: center;
-  }
-
-  .loading-steps {
-    font-size: 11px;
-    color: var(--accent);
-    font-weight: 500;
-  }
+  .loading-text { font-size: 13px; color: var(--text-secondary); text-align: center; }
+  .loading-steps { font-size: 11px; color: var(--accent); font-weight: 500; }
 
   /* ========== Error State ========== */
-  .error-state {
-    display: none;
-    padding: 36px 20px;
-    text-align: center;
-  }
-
-  .error-icon-wrap {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    background: var(--danger-bg);
-    display: inline-grid;
-    place-items: center;
-    margin-bottom: 14px;
-  }
-
-  .error-icon-wrap svg {
-    width: 22px;
-    height: 22px;
-    color: var(--danger);
-  }
-
-  .error-title {
-    font-size: 15px;
-    font-weight: 600;
-    margin-bottom: 6px;
-    color: var(--text-primary);
-  }
-
-  .error-msg {
-    font-size: 12px;
-    color: var(--text-secondary);
-    line-height: 1.5;
-    word-break: break-word;
-    overflow-wrap: break-word;
-  }
+  .error-state { display: none; padding: 30px 20px; text-align: center; }
+  .error-icon-wrap { width: 48px; height: 48px; border-radius: 12px; background: var(--danger-bg); display: inline-grid; place-items: center; margin-bottom: 14px; }
+  .error-icon-wrap svg { width: 22px; height: 22px; color: var(--danger); }
+  .error-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; color: var(--text-primary); }
+  .error-msg { font-size: 12px; color: var(--text-secondary); line-height: 1.5; word-break: break-word; }
 
   /* ========== Result Panel ========== */
   .result { display: none; }
@@ -363,103 +272,45 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    padding: 16px;
+    padding: 14px;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: 14px;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
     transition: all var(--transition);
-    min-width: 0;
   }
 
   .score-ring {
     position: relative;
-    width: 80px;
-    height: 80px;
+    width: 76px;
+    height: 76px;
     flex-shrink: 0;
   }
-
-  .score-ring svg {
-    transform: rotate(-90deg);
-    width: 80px;
-    height: 80px;
-  }
-
-  .score-ring .track {
-    fill: none;
-    stroke: var(--score-track);
-    stroke-width: 7;
-  }
-
+  .score-ring svg { transform: rotate(-90deg); width: 76px; height: 76px; }
+  .score-ring .track { fill: none; stroke: var(--score-track); stroke-width: 7; }
   .score-ring .fill {
-    fill: none;
-    stroke-width: 7;
-    stroke-linecap: round;
-    transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1);
-    stroke-dasharray: 226.2;
-    stroke-dashoffset: 226.2;
+    fill: none; stroke-width: 7; stroke-linecap: round;
+    transition: stroke-dashoffset 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    stroke-dasharray: 216.8;
+    stroke-dashoffset: 216.8;
   }
 
   .score-num {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
   }
-
-  .score-num .value {
-    font-weight: 700;
-    font-size: 22px;
-    line-height: 1;
-  }
-
-  .score-num .label {
-    font-size: 9px;
-    color: var(--text-muted);
-    margin-top: 2px;
-    font-weight: 500;
-  }
-
+  .score-num .value { font-weight: 700; font-size: 20px; line-height: 1; }
+  .score-num .label { font-size: 9px; color: var(--text-muted); margin-top: 2px; font-weight: 500; }
   .score-info { flex: 1; min-width: 0; }
-
-  .verdict-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    margin-bottom: 8px;
-  }
-
+  .verdict-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 6px; }
   .verdict-badge.safe { color: var(--safe); background: var(--safe-bg); border: 1px solid var(--safe-border); }
   .verdict-badge.suspicious { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-border); }
   .verdict-badge.scam { color: var(--danger); background: var(--danger-bg); border: 1px solid var(--danger-border); }
-
-  .confidence-badge {
-    font-size: 9px;
-    padding: 2px 5px;
-    border-radius: 4px;
-    font-weight: 600;
-    margin-left: 6px;
-  }
-
+  .confidence-badge { font-size: 9px; padding: 2px 5px; border-radius: 4px; font-weight: 600; margin-left: 6px; }
   .confidence-badge.high { background: var(--safe-bg); color: var(--safe); }
   .confidence-badge.medium { background: var(--warn-bg); color: var(--warn); }
   .confidence-badge.low { background: var(--danger-bg); color: var(--danger); }
-
-  .verdict-summary {
-    font-size: 12px;
-    color: var(--text-secondary);
-    line-height: 1.55;
-    word-break: break-word;
-    overflow-wrap: break-word;
-    min-width: 0;
-  }
+  .verdict-summary { font-size: 12px; color: var(--text-secondary); line-height: 1.55; word-break: break-word; }
 
   /* Section Headers */
   .section-header {
@@ -468,8 +319,54 @@
     letter-spacing: 0.8px;
     text-transform: uppercase;
     color: var(--text-muted);
-    margin: 16px 0 8px;
+    margin: 14px 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
+
+  /* Collapsible panels */
+  .collapsible {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 6px;
+    overflow: hidden;
+    transition: all var(--transition);
+    background: var(--bg-secondary);
+  }
+  .collapsible-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    cursor: pointer;
+    user-select: none;
+    transition: background var(--transition);
+  }
+  .collapsible-header:hover { background: var(--bg-tertiary); }
+  .collapsible-header .left { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--text-primary); }
+  .collapsible-header .chevron { transition: transform 0.2s ease; color: var(--text-muted); }
+  .collapsible.open .chevron { transform: rotate(180deg); }
+  .collapsible-body {
+    padding: 0 12px 10px;
+    display: none;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .collapsible.open .collapsible-body { display: block; }
+
+  .collapsible-header .count-badge {
+    background: var(--accent-subtle);
+    color: var(--accent);
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .collapsible-header .count-badge.danger { background: var(--danger-bg); color: var(--danger); }
+  .collapsible-header .count-badge.warn { background: var(--warn-bg); color: var(--warn); }
+  .collapsible-header .count-badge.safe { background: var(--safe-bg); color: var(--safe); }
 
   /* Flags */
   .flags-section { margin-bottom: 4px; }
@@ -478,262 +375,183 @@
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 10px 12px;
-    margin-bottom: 6px;
-    border-radius: 10px;
+    padding: 8px 10px;
+    margin-bottom: 4px;
+    border-radius: 8px;
     font-size: 12px;
     line-height: 1.5;
-    background: var(--bg-secondary);
+    background: var(--bg-primary);
     border: 1px solid var(--border);
     transition: all var(--transition);
-    min-width: 0;
     overflow: hidden;
   }
-
-  .flag-item .flag-icon { flex-shrink: 0; font-size: 14px; }
-  .flag-item .flag-text { flex: 1; min-width: 0; word-break: break-word; overflow-wrap: break-word; color: var(--text-secondary); }
-
+  .flag-item .flag-icon { flex-shrink: 0; font-size: 13px; }
+  .flag-item .flag-text { flex: 1; word-break: break-word; color: var(--text-secondary); }
   .flag-item.bad { border-color: var(--danger-border); background: var(--danger-bg); }
   .flag-item.bad .flag-text { color: var(--danger); }
   .flag-item.warn { border-color: var(--warn-border); background: var(--warn-bg); }
   .flag-item.warn .flag-text { color: var(--warn); }
+  .no-flags { text-align: center; padding: 14px; color: var(--safe); font-size: 12px; background: var(--safe-bg); border-radius: 10px; border: 1px solid var(--safe-border); }
 
-  .no-flags {
-    text-align: center;
-    padding: 16px;
-    color: var(--safe);
-    font-size: 12px;
-    background: var(--safe-bg);
-    border-radius: 10px;
-    border: 1px solid var(--safe-border);
-  }
+  /* Threat breakdown bars */
+  .threat-bar-wrap { margin-bottom: 6px; }
+  .threat-bar-label { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px; }
+  .threat-bar-label .name { color: var(--text-secondary); }
+  .threat-bar-label .score { color: var(--text-primary); font-weight: 600; }
+  .threat-bar-track { height: 6px; background: var(--score-track); border-radius: 3px; overflow: hidden; }
+  .threat-bar-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; width: 0; }
 
   /* Domain Grid */
-  .domain-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-bottom: 14px;
-  }
-
-  .domain-card {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 12px;
-    transition: all var(--transition);
-    min-width: 0;
-    overflow: hidden;
-  }
-
-  .domain-card-label {
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    margin-bottom: 4px;
-  }
-
-  .domain-card-value {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .domain-card-sub {
-    font-size: 9px;
-    color: var(--text-muted);
-    margin-top: 2px;
-    display: none;
-    font-weight: 400;
-  }
+  .domain-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+  .domain-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; transition: all var(--transition); overflow: hidden; }
+  .domain-card-label { font-size: 10px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 3px; }
+  .domain-card-value { font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .domain-card-sub { font-size: 9px; color: var(--text-muted); margin-top: 2px; display: none; font-weight: 400; }
 
   /* Review bar */
-  .review-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 12px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    margin-bottom: 14px;
-    font-size: 11px;
-    transition: all var(--transition);
-  }
-
-  .review-bar-label {
-    color: var(--text-muted);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-size: 10px;
-  }
-
-  .review-bar-value {
-    color: var(--text-primary);
-    font-weight: 600;
-    font-size: 12px;
-  }
+  .review-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px; font-size: 11px; transition: all var(--transition); }
+  .review-bar-label { color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px; }
+  .review-bar-value { color: var(--text-primary); font-weight: 600; font-size: 12px; }
 
   /* Action Buttons */
-  .actions {
-    display: flex;
-    gap: 8px;
-    padding-bottom: 8px;
+  .actions { display: flex; gap: 6px; padding-bottom: 6px; flex-wrap: wrap; }
+  .actions .btn {
+    flex: 1; min-width: 80px; padding: 8px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all var(--transition); border: 1px solid var(--border); text-align: center;
   }
-
-  .btn-highlight {
-    flex: 1;
-    padding: 10px;
-    background: var(--accent-subtle);
-    border: 1px solid var(--accent-light);
-    border-radius: 10px;
-    color: var(--accent);
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all var(--transition);
-  }
-
-  .btn-highlight:hover { background: var(--accent-light); }
-
-  .btn-secondary {
-    flex: 1;
-    padding: 10px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all var(--transition);
-  }
-
+  .btn-primary { background: var(--accent); border-color: var(--accent) !important; color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: var(--bg-secondary); color: var(--text-secondary); }
   .btn-secondary:hover { border-color: var(--border-hover); background: var(--bg-tertiary); }
+  .btn-outline { background: transparent; color: var(--text-secondary); }
+  .btn-outline:hover { border-color: var(--border-hover); background: var(--bg-tertiary); }
+  .btn-danger { background: var(--danger-bg); border-color: var(--danger-border) !important; color: var(--danger); }
+  .btn-danger:hover { background: var(--danger); color: #fff; }
+  .btn-success { background: var(--safe-bg); border-color: var(--safe-border) !important; color: var(--safe); }
+  .btn-success:hover { background: var(--safe); color: #fff; }
 
-  /* ========== Details Panel ========== */
-  .detail-section {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 14px;
-    margin-bottom: 8px;
-    transition: all var(--transition);
-    min-width: 0;
-    overflow: hidden;
-  }
-
-  .detail-title {
-    font-size: 12px;
-    font-weight: 600;
-    margin-bottom: 10px;
-    color: var(--accent);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .detail-item {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    font-size: 11px;
-    padding: 5px 0;
-    border-bottom: 1px solid var(--border);
-    color: var(--text-secondary);
-    min-width: 0;
-  }
-
+  /* Details sections */
+  .detail-section { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 8px; transition: all var(--transition); }
+  .detail-title { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: var(--accent); display: flex; align-items: center; gap: 6px; }
+  .detail-item { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; padding: 4px 0; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
   .detail-item:last-child { border-bottom: none; }
   .detail-item span:first-child { color: var(--text-muted); flex-shrink: 0; }
   .detail-item.risk { color: var(--danger); }
   .detail-item.positive { color: var(--safe); }
-
-  .detail-value {
-    color: var(--text-primary);
-    font-weight: 600;
-    text-align: right;
-    min-width: 0;
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
+  .detail-value { color: var(--text-primary); font-weight: 600; text-align: right; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .detail-item.url { align-items: flex-start; }
-  .detail-item.url .detail-value {
-    text-align: left;
-    white-space: normal;
-    word-break: break-all;
-    flex: 1;
-    min-width: 0;
-  }
+  .detail-item.url .detail-value { text-align: left; white-space: normal; word-break: break-all; }
 
   /* ========== History Panel ========== */
+  .history-search {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .history-search input {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 12px;
+    outline: none;
+    transition: border-color var(--transition);
+  }
+  .history-search input:focus { border-color: var(--accent); }
+  .history-search input::placeholder { color: var(--text-muted); }
+
   .history-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
+    gap: 10px;
+    padding: 8px 10px;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: 10px;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     cursor: pointer;
     transition: all var(--transition);
-    min-width: 0;
     overflow: hidden;
   }
-
-  .history-item:hover {
-    border-color: var(--border-hover);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .history-score {
-    font-size: 14px;
-    font-weight: 700;
-    min-width: 48px;
-  }
-
+  .history-item:hover { border-color: var(--border-hover); box-shadow: var(--shadow-sm); }
+  .history-score { font-size: 13px; font-weight: 700; min-width: 40px; }
   .history-info { flex: 1; min-width: 0; }
-
-  .history-url {
-    font-size: 12px;
-    color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .history-time {
-    font-size: 10px;
-    color: var(--text-muted);
-    margin-top: 2px;
-  }
-
-  .history-empty {
-    text-align: center;
-    color: var(--text-muted);
-    padding: 40px 20px;
-    font-size: 13px;
-  }
-
-  .history-empty-icon {
-    font-size: 28px;
+  .history-url { font-size: 11px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .history-time { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+  .history-empty { text-align: center; color: var(--text-muted); padding: 30px 20px; font-size: 13px; }
+  .history-empty-icon { font-size: 28px; margin-bottom: 8px; opacity: 0.5; }
+  .history-filter {
+    display: flex;
+    gap: 4px;
     margin-bottom: 8px;
-    opacity: 0.5;
+    flex-wrap: wrap;
   }
+  .filter-chip {
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: 10px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    transition: all var(--transition);
+  }
+  .filter-chip:hover { border-color: var(--border-hover); color: var(--text-secondary); }
+  .filter-chip.active { background: var(--accent-subtle); border-color: var(--accent-light); color: var(--accent); }
+
+  /* ========== Settings Panel ========== */
+  .settings-group { margin-bottom: 12px; }
+  .settings-group-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 6px; }
+  .setting-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 4px; }
+  .setting-row label { font-size: 12px; color: var(--text-primary); }
+  .setting-row input[type="text"], .setting-row input[type="password"] {
+    width: 180px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 11px; background: var(--bg-primary); color: var(--text-primary); outline: none;
+  }
+  .setting-row input[type="text"]:focus, .setting-row input[type="password"]:focus { border-color: var(--accent); }
+  .setting-row input[type="range"] { width: 100px; accent-color: var(--accent); }
+  .setting-row .range-value { font-size: 12px; font-weight: 600; color: var(--accent); min-width: 24px; text-align: right; }
+  .toggle-switch {
+    position: relative; width: 36px; height: 20px; flex-shrink: 0;
+    background: var(--border); border-radius: 10px; cursor: pointer; transition: background 0.2s;
+  }
+  .toggle-switch.active { background: var(--accent); }
+  .toggle-switch::after {
+    content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+    background: #fff; border-radius: 50%; transition: transform 0.2s;
+  }
+  .toggle-switch.active::after { transform: translateX(16px); }
+
+  /* Whitelist/Blacklist Management */
+  .list-manager { margin-top: 8px; }
+  .list-manager .add-row { display: flex; gap: 4px; margin-bottom: 6px; }
+  .list-manager .add-row input { flex: 1; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 11px; background: var(--bg-primary); color: var(--text-primary); outline: none; }
+  .list-manager .add-row input:focus { border-color: var(--accent); }
+  .list-manager .add-row button { padding: 6px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid var(--accent-light); background: var(--accent-subtle); color: var(--accent); }
+  .list-item { display: flex; justify-content: space-between; align-items: center; padding: 5px 8px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 3px; font-size: 11px; }
+  .list-item .remove-btn { color: var(--danger); cursor: pointer; font-weight: 700; font-size: 14px; line-height: 1; padding: 0 4px; }
+  .list-item .remove-btn:hover { opacity: 0.7; }
+
+  /* Tab switcher inside settings */
+  .settings-tabs {
+    display: flex; gap: 4px; margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 6px;
+  }
+  .settings-tab {
+    padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 500;
+    cursor: pointer; border: 1px solid transparent; background: transparent; color: var(--text-muted);
+    transition: all var(--transition);
+  }
+  .settings-tab:hover { color: var(--text-secondary); }
+  .settings-tab.active { background: var(--accent-subtle); border-color: var(--accent-light); color: var(--accent); }
+
+  .settings-content { display: none; }
+  .settings-content.active { display: block; }
 
   /* ========== Footer ========== */
   .footer {
-    padding: 6px 16px;
+    padding: 4px 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -747,17 +565,16 @@
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 4px;
-    padding: 8px 12px 10px;
+    padding: 6px 12px 8px;
     background: var(--nav-bg);
     border-top: 1px solid var(--border);
     transition: background var(--transition);
   }
-
   .nav-btn {
     background: transparent;
     border: 1px solid transparent;
     color: var(--text-muted);
-    padding: 8px 4px;
+    padding: 6px 4px;
     border-radius: 8px;
     font-size: 12px;
     font-weight: 500;
@@ -766,36 +583,26 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 3px;
+    gap: 2px;
   }
-
-  .nav-btn svg {
-    width: 16px;
-    height: 16px;
-    stroke: currentColor;
-    fill: none;
-    stroke-width: 2;
-  }
-
+  .nav-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
   .nav-btn:hover { color: var(--text-secondary); }
-
-  .nav-btn.active {
-    color: var(--accent);
-    background: var(--accent-subtle);
-    border-color: var(--accent-light);
-  }
-
-  .nav-label { font-size: 10px; }
+  .nav-btn.active { color: var(--accent); background: var(--accent-subtle); border-color: var(--accent-light); }
+  .nav-label { font-size: 9px; }
 
   /* ========== Utilities ========== */
-  .fade-in {
-    animation: fadeIn 0.3s ease forwards;
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
+  .fade-in { animation: fadeIn 0.3s ease forwards; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  .mt-4 { margin-top: 4px; }
+  .mt-8 { margin-top: 8px; }
+  .mb-4 { margin-bottom: 4px; }
+  .mb-8 { margin-bottom: 8px; }
+  .text-center { text-align: center; }
+  .text-muted { color: var(--text-muted); }
+  .flex { display: flex; }
+  .flex-1 { flex: 1; }
+  .gap-4 { gap: 4px; }
+  .gap-8 { gap: 8px; }
 </style>
 </head>
 <body>
@@ -834,14 +641,10 @@
 
   <!-- Content Panels -->
   <div class="content">
-    <!-- Scan Panel -->
+
+    <!-- ───────── Scan Panel ───────── -->
     <div class="panel active" id="panel-scan">
-      <div class="trial-note" id="trialNote" style="background: linear-gradient(135deg, #22c55e15, #16a34a10); border: 1px solid #22c55e30; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 11px; color: #16a34a; text-align: center; line-height: 1.4;">
-        <strong>&#128227; First Month Free!</strong> Testing period. Payment starts next month.
-      </div>
-      <button class="scan-btn" id="scanBtn">
-        Scan This Page
-      </button>
+      <button class="scan-btn" id="scanBtn">Scan This Page</button>
 
       <div class="welcome-state" id="welcomeState">
         <div class="welcome-icon">
@@ -868,16 +671,16 @@
           </svg>
         </div>
         <div class="error-title">Scan Failed</div>
-        <div class="error-msg" id="errorMsg">Could not analyze this page. Try refreshing and scanning again.</div>
+        <div class="error-msg" id="errorMsg">Could not analyze this page.</div>
       </div>
 
       <div class="result" id="resultPanel">
         <!-- Score Card -->
         <div class="score-card">
           <div class="score-ring">
-            <svg viewBox="0 0 80 80">
-              <circle class="track" cx="40" cy="40" r="36"></circle>
-              <circle class="fill" id="scoreCircle" cx="40" cy="40" r="36"></circle>
+            <svg viewBox="0 0 76 76">
+              <circle class="track" cx="38" cy="38" r="34.5"></circle>
+              <circle class="fill" id="scoreCircle" cx="38" cy="38" r="34.5"></circle>
             </svg>
             <div class="score-num">
               <span class="value" id="scoreNum">--</span>
@@ -890,85 +693,174 @@
           </div>
         </div>
 
-        <!-- Detected Issues -->
-        <div class="flags-section">
-          <div class="section-header">Detected Issues</div>
-          <div id="flagsList"></div>
+        <!-- Threat Breakdown (collapsible) -->
+        <div class="collapsible" id="threatBreakdownCollapse">
+          <div class="collapsible-header">
+            <span class="left">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Threat Breakdown
+            </span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="collapsible-body" id="threatBreakdownBody"></div>
+        </div>
+
+        <!-- Detected Issues (collapsible) -->
+        <div class="collapsible open" id="issuesCollapse">
+          <div class="collapsible-header">
+            <span class="left">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Detected Issues
+            </span>
+            <span><span class="count-badge danger" id="issuesCount">0</span> <span class="chevron">▼</span></span>
+          </div>
+          <div class="collapsible-body" id="flagsList">
+            <div class="no-flags">No issues detected on this page</div>
+          </div>
+        </div>
+
+        <!-- Recommendations (collapsible) -->
+        <div class="collapsible" id="recommendationsCollapse">
+          <div class="collapsible-header">
+            <span class="left">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              Recommendations
+            </span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="collapsible-body" id="recommendationsBody"></div>
         </div>
 
         <!-- Domain Intelligence -->
-        <div class="section-header">Domain Intelligence</div>
-        <div class="domain-grid">
-          <div class="domain-card">
-            <div class="domain-card-label">SSL</div>
-            <div class="domain-card-value" id="sslStatus">--</div>
+        <div class="collapsible" id="domainCollapse">
+          <div class="collapsible-header">
+            <span class="left">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Domain Intelligence
+            </span>
+            <span class="chevron">▼</span>
           </div>
-          <div class="domain-card">
-            <div class="domain-card-label">Domain Age</div>
-            <div class="domain-card-value" id="domainAge">--</div>
-            <div class="domain-card-sub" id="domainAgeSub"></div>
+          <div class="collapsible-body">
+            <div class="domain-grid">
+              <div class="domain-card"><div class="domain-card-label">SSL</div><div class="domain-card-value" id="sslStatus">--</div></div>
+              <div class="domain-card"><div class="domain-card-label">Domain Age</div><div class="domain-card-value" id="domainAge">--</div><div class="domain-card-sub" id="domainAgeSub"></div></div>
+              <div class="domain-card"><div class="domain-card-label">Phishing DB</div><div class="domain-card-value" id="phishStatus">--</div></div>
+              <div class="domain-card"><div class="domain-card-label">Registrar</div><div class="domain-card-value" id="registrarName">--</div></div>
+            </div>
+            <div class="review-bar">
+              <span class="review-bar-label">Reviews Analyzed</span>
+              <span class="review-bar-value" id="reviewCount">--</span>
+            </div>
           </div>
-          <div class="domain-card">
-            <div class="domain-card-label">Phishing DB</div>
-            <div class="domain-card-value" id="phishStatus">--</div>
-          </div>
-          <div class="domain-card">
-            <div class="domain-card-label">Registrar</div>
-            <div class="domain-card-value" id="registrarName">--</div>
-          </div>
-        </div>
-
-        <!-- Reviews count (compact) -->
-        <div class="review-bar">
-          <span class="review-bar-label">Reviews Analyzed</span>
-          <span class="review-bar-value" id="reviewCount">--</span>
         </div>
 
         <!-- Actions -->
         <div class="actions">
-          <button class="btn-highlight" id="highlightBtn">Highlight Issues</button>
-          <button class="btn-secondary" id="rescanBtn">Rescan</button>
+          <button class="btn btn-primary" id="highlightBtn">Highlight Issues</button>
+          <button class="btn btn-secondary" id="rescanBtn">Rescan</button>
+        </div>
+
+        <!-- Feedback Buttons -->
+        <div class="actions">
+          <button class="btn btn-outline" id="reportFalsePositiveBtn">Report False Positive</button>
+          <button class="btn btn-outline" id="reportFalseNegativeBtn">Report False Negative</button>
         </div>
       </div>
     </div>
 
-    <!-- Details Panel -->
+    <!-- ───────── Details Panel ───────── -->
     <div class="panel" id="panel-details">
       <div id="detailsContent"></div>
     </div>
 
-    <!-- History Panel -->
+    <!-- ───────── History Panel ───────── -->
     <div class="panel" id="panel-history">
+      <div class="history-search">
+        <input type="text" id="historySearchInput" placeholder="Search history..." />
+        <button class="btn btn-secondary" id="historySearchClear" style="padding:6px 10px;">Clear</button>
+      </div>
+      <div class="history-filter">
+        <button class="filter-chip active" data-filter="all">All</button>
+        <button class="filter-chip" data-filter="SAFE">Safe</button>
+        <button class="filter-chip" data-filter="SUSPICIOUS">Suspicious</button>
+        <button class="filter-chip" data-filter="SCAM">Scam</button>
+      </div>
       <div id="historyList"></div>
-      <button class="btn-secondary" id="clearHistoryBtn" style="margin-top:8px; width:100%;">Clear History</button>
+      <button class="btn btn-secondary" id="clearHistoryBtn" style="margin-top:6px; width:100%;">Clear History</button>
     </div>
 
-    <!-- Settings Panel -->
+    <!-- ───────── Settings Panel ───────── -->
     <div class="panel" id="panel-settings">
-      <div class="section-header">API Configuration</div>
-      <div class="detail-section">
-        <div class="detail-item">
-          <span>Backend URL</span>
-          <input type="text" id="settingBackendUrl" placeholder="https://your-backend.vercel.app" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:11px; background:var(--bg-primary); color:var(--text-primary);">
+      <div class="settings-tabs">
+        <button class="settings-tab active" data-settings-tab="tab-general">General</button>
+        <button class="settings-tab" data-settings-tab="tab-api">API</button>
+        <button class="settings-tab" data-settings-tab="tab-lists">Lists</button>
+      </div>
+
+      <!-- General Settings -->
+      <div class="settings-content active" id="tab-general">
+        <div class="settings-group">
+          <div class="settings-group-label">Sensitivity</div>
+          <div class="setting-row">
+            <label>Warning Threshold</label>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <input type="range" id="severitySlider" min="0" max="100" value="40" />
+              <span class="range-value" id="severityValue">40</span>
+            </div>
+          </div>
         </div>
-        <div class="detail-item">
-          <span>API Key</span>
-          <input type="password" id="settingApiKey" placeholder="Your API key" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:11px; background:var(--bg-primary); color:var(--text-primary);">
+        <div class="settings-group">
+          <div class="settings-group-label">Behavior</div>
+          <div class="setting-row">
+            <label>Auto-scan pages on load</label>
+            <div class="toggle-switch active" id="autoScanToggle"></div>
+          </div>
+          <div class="setting-row">
+            <label>Show notifications for high risk</label>
+            <div class="toggle-switch active" id="notificationsToggle"></div>
+          </div>
         </div>
-        <button class="scan-btn" id="saveSettingsBtn" style="margin-top:10px; width:100%;">Save Settings</button>
+        <button class="btn btn-primary" id="saveGeneralSettings" style="width:100%;margin-top:6px;">Save Settings</button>
+      </div>
+
+      <!-- API Settings -->
+      <div class="settings-content" id="tab-api">
+        <div class="settings-group">
+          <div class="settings-group-label">Backend Connection</div>
+          <div class="setting-row">
+            <label>Backend URL</label>
+            <input type="text" id="settingBackendUrl" placeholder="http://localhost:3001" />
+          </div>
+          <div class="setting-row">
+            <label>API Key</label>
+            <input type="password" id="settingApiKey" placeholder="Your API key" />
+          </div>
+        </div>
+        <button class="btn btn-primary" id="saveApiSettings" style="width:100%;">Save API Settings</button>
         <div id="settingsSaved" style="text-align:center; margin-top:8px; font-size:11px; color:var(--safe); display:none;">Settings saved!</div>
       </div>
-      
-      <div class="section-header">Security</div>
-      <div class="detail-section">
-        <div style="font-size:11px; color:var(--text-secondary); line-height:1.5;">
-          <p style="margin-bottom:8px;"><strong>Production Checklist:</strong></p>
-          <ul style="padding-left:16px; margin:0;">
-            <li>Set ITL_API_KEY in backend .env</li>
-            <li>Set EXTENSION_ID after publishing</li>
-            <li>Set ALLOW_LOCALHOST=false</li>
-            <li>Get API key from <a href="#" id="getApiKeyLink" style="color:var(--accent);">console.groq.com</a></li>
-          </ul>
+
+      <!-- Whitelist/Blacklist -->
+      <div class="settings-content" id="tab-lists">
+        <div class="settings-group">
+          <div class="settings-group-label">Whitelist</div>
+          <div class="list-manager" id="whitelistManager">
+            <div class="add-row">
+              <input type="text" id="whitelistInput" placeholder="example.com" />
+              <button id="addWhitelistBtn">Add</button>
+            </div>
+            <div id="whitelistList"></div>
+          </div>
+        </div>
+        <div class="settings-group" style="margin-top:10px;">
+          <div class="settings-group-label">Blacklist</div>
+          <div class="list-manager" id="blacklistManager">
+            <div class="add-row">
+              <input type="text" id="blacklistInput" placeholder="scam-site.com" />
+              <button id="addBlacklistBtn">Add</button>
+            </div>
+            <div id="blacklistList"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -976,8 +868,8 @@
 
   <!-- Footer -->
   <div class="footer">
-    <span>Ali Zafar</span>
     <span>Is This Legit v1.0</span>
+    <span id="footerStatus">Ready</span>
   </div>
 
   <!-- Navigation -->

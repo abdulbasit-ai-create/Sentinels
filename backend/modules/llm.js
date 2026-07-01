@@ -1,67 +1,410 @@
 // ============================================================
 //  Is This Legit? — backend/modules/llm.js
 //  AI analysis using Groq Llama 3.3 70B
-//  With false-positive prevention & stricter scoring
+//  With fallback, caching, rate limiting, structured output parsing
+//
+//  ENHANCEMENTS:
+//  - Fallback model: keyword analysis when Groq unavailable
+//  - Structured output parsing with validation & retry
+//  - LLM response caching (per domain, TTL 30 min)
+//  - Rate limiting per IP
+//  - Prompt injection protection (sanitizing user data)
 // ============================================================
 
 const Groq = require('groq-sdk');
+const crypto = require('crypto');
 const { isTrustedDomain, extractRootDomain } = require('./heuristics');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-async function analyzeWithAI(data) {
-  const prompt = buildAdvancedPrompt(data);
+// ═══════════════════════════════════════════════════════════════
+//  CACHE
+// ═══════════════════════════════════════════════════════════════
 
+const LLM_CACHE = new Map();
+const LLM_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+const LLM_CACHE_MAX = 200;
+
+function getCachedResponse(cacheKey) {
+  const entry = LLM_CACHE.get(cacheKey);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > LLM_CACHE_TTL) {
+    LLM_CACHE.delete(cacheKey);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCachedResponse(cacheKey, data) {
+  if (LLM_CACHE.size > LLM_CACHE_MAX) {
+    const oldest = LLM_CACHE.keys().next().value;
+    if (oldest) LLM_CACHE.delete(oldest);
+  }
+  LLM_CACHE.set(cacheKey, { data, ts: Date.now() });
+}
+
+function getCacheStats() {
+  return { size: LLM_CACHE.size, maxSize: LLM_CACHE_MAX, ttl: LLM_CACHE_TTL };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RATE LIMITING
+// ═══════════════════════════════════════════════════════════════
+
+const LLM_RATE_LIMITS = new Map();
+const LLM_RATE_WINDOW = 60 * 1000; // 1 minute
+const LLM_RATE_MAX = 10; // max 10 LLM calls per minute per IP
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const entry = LLM_RATE_LIMITS.get(ip);
+  if (!entry || now - entry.reset > LLM_RATE_WINDOW) {
+    LLM_RATE_LIMITS.set(ip, { count: 1, reset: now });
+    return { allowed: true, remaining: LLM_RATE_MAX - 1, resetIn: LLM_RATE_WINDOW };
+  }
+  if (entry.count >= LLM_RATE_MAX) {
+    const resetIn = LLM_RATE_WINDOW - (now - entry.reset);
+    return { allowed: false, remaining: 0, resetIn };
+  }
+  entry.count++;
+  return { allowed: true, remaining: LLM_RATE_MAX - entry.count, resetIn: LLM_RATE_WINDOW - (now - entry.reset) };
+}
+
+// Periodic cleanup
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of LLM_RATE_LIMITS) {
+    if (now - entry.reset > LLM_RATE_WINDOW * 2) LLM_RATE_LIMITS.delete(ip);
+  }
+}, 5 * 60 * 1000).unref();
+
+// ═══════════════════════════════════════════════════════════════
+//  MAIN EXPORT with cache + rate limit + fallback
+// ═══════════════════════════════════════════════════════════════
+
+async function analyzeWithAI(data, clientIp = 'unknown') {
+  // 1. Check rate limit
+  const rateCheck = checkRateLimit(clientIp);
+  if (!rateCheck.allowed && process.env.GROQ_API_KEY) {
+    console.warn(`[LLM] Rate limit exceeded for ${clientIp}. Using fallback.`);
+    return fallbackAnalysis(data);
+  }
+
+  // 2. Check cache
+  const cacheKey = buildCacheKey(data);
+  const cached = getCachedResponse(cacheKey);
+  if (cached) {
+    console.log(`[LLM] Cache hit for ${data.url}`);
+    return cached;
+  }
+
+  // 3. Sanitize user data for prompt injection protection
+  const sanitizedData = sanitizeForPrompt(data);
+
+  // 4. Try Groq API
   try {
-    const response = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      max_tokens: 900,
-      temperature: 0.1,
-      messages: [
-        {
-          role: 'system',
-          content: buildSystemPrompt(data)
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ]
-    });
-
-    const raw = response.choices[0]?.message?.content?.trim() || '{}';
-    const clean = raw.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
-
-    const score = clamp(parseInt(parsed.score) || 50, 0, 100);
-
-    return {
-      score,
-      verdict: ['SAFE', 'SUSPICIOUS', 'SCAM'].includes(parsed.verdict) ? parsed.verdict : calculateVerdict(score),
-      flags: Array.isArray(parsed.flags) ? parsed.flags.slice(0, 12) : [],
-      summary: typeof parsed.summary === 'string' ? parsed.summary.slice(0, 300) : 'Analysis complete.',
-      details: {
-        aiAnalysis: parsed.analysis || null,
-        riskFactors: parsed.riskFactors || [],
-        positiveSignals: parsed.positiveSignals || [],
-        confidence: parsed.confidence || 'medium',
-        recommendations: parsed.recommendations || []
-      }
-    };
-
+    const result = await queryGroq(sanitizedData);
+    setCachedResponse(cacheKey, result);
+    return result;
   } catch (err) {
     console.error('[LLM] Groq API error:', err.message);
-    return {
-      score: 50,
-      verdict: 'SUSPICIOUS',
-      flags: ['AI analysis unavailable — manual review recommended'],
-      summary: 'Could not complete AI analysis. Heuristic and database checks still apply.',
-      details: { error: err.message }
-    };
+    // 5. Fallback
+    const fallback = fallbackAnalysis(sanitizedData);
+    // Don't cache fallback results
+    return fallback;
   }
 }
 
-// ── System Prompt — with false-positive prevention ───────────
+// ═══════════════════════════════════════════════════════════════
+//  GROQ API CALL with retry + structured output parsing
+// ═══════════════════════════════════════════════════════════════
+
+async function queryGroq(data, retries = 2) {
+  const prompt = buildAdvancedPrompt(data);
+  let lastError;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 900,
+        temperature: 0.1,
+        messages: [
+          { role: 'system', content: buildSystemPrompt(data) },
+          { role: 'user', content: prompt }
+        ]
+      });
+
+      const raw = response.choices[0]?.message?.content?.trim() || '{}';
+      const parsed = parseLLMResponse(raw);
+
+      if (parsed) {
+        return parsed;
+      }
+
+      lastError = new Error('Failed to parse LLM response');
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 4000);
+        console.warn(`[LLM] Retry ${attempt + 1}/${retries} after ${delay}ms`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+  }
+
+  throw lastError || new Error('LLM query failed after retries');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  STRUCTURED OUTPUT PARSER with validation
+// ═══════════════════════════════════════════════════════════════
+
+function parseLLMResponse(raw) {
+  // Remove markdown code fences
+  let clean = raw.replace(/```json|```javascript|```/g, '').trim();
+
+  // Try direct parse
+  let parsed;
+  try {
+    parsed = JSON.parse(clean);
+  } catch {
+    // Try to extract JSON from the text using regex
+    const jsonMatch = clean.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch {
+        return null;
+      }
+    } else {
+      return null;
+    }
+  }
+
+  // Validate required fields
+  const score = typeof parsed.score === 'number' ? clamp(Math.round(parsed.score), 0, 100) : 
+                typeof parsed.score === 'string' ? clamp(parseInt(parsed.score) || 50, 0, 100) : 50;
+
+  const verdict = ['SAFE', 'SUSPICIOUS', 'SCAM'].includes(parsed.verdict) ? parsed.verdict : calculateVerdict(score);
+
+  return {
+    score,
+    verdict,
+    flags: Array.isArray(parsed.flags) ? parsed.flags.slice(0, 12) : [],
+    summary: typeof parsed.summary === 'string' ? parsed.summary.slice(0, 300) : 'Analysis complete.',
+    details: {
+      aiAnalysis: parsed.analysis || null,
+      riskFactors: Array.isArray(parsed.riskFactors) ? parsed.riskFactors.slice(0, 10) : [],
+      positiveSignals: Array.isArray(parsed.positiveSignals) ? parsed.positiveSignals.slice(0, 8) : [],
+      confidence: ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : 'medium',
+      recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations.slice(0, 5) : [],
+      aiProvider: 'groq',
+      aiModel: 'llama-3.3-70b-versatile',
+    }
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PROMPT INJECTION PROTECTION
+// ═══════════════════════════════════════════════════════════════
+
+function sanitizeForPrompt(data) {
+  const sanitized = { ...data };
+
+  // Strip any user-provided text that could contain injection
+  const sanitizeStr = (str) => {
+    if (typeof str !== 'string') return str || '';
+    // Remove null bytes
+    let s = str.replace(/\0/g, '');
+    // Remove excessive newlines (could be used for injection)
+    s = s.replace(/\n{3,}/g, '\n\n');
+    // Truncate to safe length
+    s = s.slice(0, 3000);
+    // Remove common injection patterns
+    s = s.replace(/ignore all previous instructions/gi, '[REDACTED]');
+    s = s.replace(/ignore all prior instructions/gi, '[REDACTED]');
+    s = s.replace(/you are now/gi, '[REDACTED]');
+    s = s.replace(/forget everything/gi, '[REDACTED]');
+    s = s.replace(/your new role is/gi, '[REDACTED]');
+    s = s.replace(/you will now act as/gi, '[REDACTED]');
+    return s;
+  };
+
+  sanitized.url = sanitizeStr(sanitized.url).slice(0, 2048);
+  sanitized.title = sanitizeStr(sanitized.title).slice(0, 200);
+  sanitized.bodyText = sanitizeStr(sanitized.bodyText).slice(0, 1500);
+
+  // Sanitize arrays
+  const sanitizeArray = (arr) => {
+    if (!Array.isArray(arr)) return [];
+    return arr.map(item => typeof item === 'string' ? sanitizeStr(item).slice(0, 200) : '').filter(Boolean).slice(0, 20);
+  };
+
+  sanitized.reviews = sanitizeArray(sanitized.reviews);
+  sanitized.prices = sanitizeArray(sanitized.prices);
+  sanitized.formFields = sanitizeArray(sanitized.formFields);
+  sanitized.darkPatterns = sanitizeArray(sanitized.darkPatterns);
+  sanitized.socialLinks = sanitizeArray(sanitized.socialLinks);
+  sanitized.trustBadges = sanitizeArray(sanitized.trustBadges);
+
+  return sanitized;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  FALLBACK ANALYSIS (local keyword-based when Groq unavailable)
+// ═══════════════════════════════════════════════════════════════
+
+function fallbackAnalysis(data) {
+  let score = 65; // start neutral
+  const flags = [];
+  const riskFactors = [];
+  const positiveSignals = [];
+  const recommendations = [];
+
+  const text = (data.bodyText || '').toLowerCase();
+  const url = (data.url || '').toLowerCase();
+  const hostname = extractHostname(data.url);
+  const rootDomain = extractRootDomain(data.url);
+
+  // ── Threat database override ──────────────────────────────────
+  if (data.isPhishing || data.isMalicious) {
+    score = 10;
+    flags.push('Flagged in threat databases');
+    riskFactors.push('Known malicious URL');
+    recommendations.push('Do NOT visit this URL - it is known to be malicious');
+  }
+
+  // ── Domain age ────────────────────────────────────────────────
+  const age = data.domainAge;
+  if (age !== null && age !== undefined && age < 7) {
+    score -= 20;
+    flags.push('Extremely new domain');
+    riskFactors.push('Domain registered less than 7 days ago');
+  } else if (age !== null && age !== undefined && age < 30) {
+    score -= 10;
+    riskFactors.push('Recently registered domain');
+  }
+
+  // ── SSL ───────────────────────────────────────────────────────
+  if (!data.hasSSL) {
+    score -= 15;
+    flags.push('No SSL certificate');
+    riskFactors.push('Insecure HTTP connection');
+    recommendations.push('Avoid entering personal information on non-HTTPS sites');
+  }
+
+  // ── Brand impersonation in URL ────────────────────────────────
+  const knownBrands = ['paypal', 'amazon', 'netflix', 'google', 'microsoft', 'apple',
+    'facebook', 'instagram', 'twitter', 'linkedin', 'whatsapp', 'youtube',
+    'spotify', 'reddit', 'ebay', 'walmart', 'chase', 'wellsfargo', 'bankofamerica'];
+
+  for (const brand of knownBrands) {
+    if (hostname.includes(brand) && !rootDomain.startsWith(brand)) {
+      score -= 20;
+      flags.push(`"${brand}" appears in URL but domain is not legitimate`);
+      riskFactors.push(`Possible ${brand} impersonation`);
+      recommendations.push(`Be cautious - this URL mentions "${brand}" but may not be the real website`);
+      break;
+    }
+  }
+
+  // ── Urgency language ──────────────────────────────────────────
+  const urgencyPatterns = ['act now', 'immediate', 'urgent', 'limited time', 'expires',
+    'your account', 'suspended', 'locked', 'verify now', 'confirm now'];
+  const foundUrgency = urgencyPatterns.filter(p => text.includes(p));
+  if (foundUrgency.length > 2) {
+    score -= 15;
+    flags.push('High-pressure urgency tactics detected');
+    riskFactors.push('Urgency language pressure');
+  }
+
+  // ── Scam phrases ─────────────────────────────────────────────
+  const scamPatterns = ['win', 'winner', 'prize', 'lottery', 'inheritance', 
+    'guaranteed', 'cryptocurrency', 'bitcoin', 'wire transfer', 'money gram',
+    'western union', 'gift card', 'nigerian', 'fee required'];
+  const foundScam = scamPatterns.filter(p => text.includes(p));
+  if (foundScam.length > 2) {
+    score -= 15;
+    flags.push('Common scam language patterns detected');
+    riskFactors.push('Fraudulent content patterns');
+  }
+
+  // ── Sensitive form fields ─────────────────────────────────────
+  const formFields = (data.formFields || []).join(' ').toLowerCase();
+  if (formFields.includes('credit card') || formFields.includes('ssn') || formFields.includes('social security')) {
+    score -= 15;
+    flags.push('Highly sensitive information requested');
+    riskFactors.push('Request for sensitive personal data');
+  }
+
+  // ── Positive signals ──────────────────────────────────────────
+  if (data.hasSSL) {
+    positiveSignals.push('Secure HTTPS connection');
+  }
+  if (age !== null && age !== undefined && age > 365) {
+    positiveSignals.push('Well-established domain (over 1 year old)');
+  }
+  if (data.reviewCount > 10) {
+    positiveSignals.push('Multiple user reviews available');
+  }
+  if (data.contactInfo?.emails?.length > 0) {
+    positiveSignals.push('Contact email available');
+  }
+  if (data.trustBadges?.length > 0) {
+    positiveSignals.push('Trust/badge indicators present');
+  }
+
+  // ── Clamp score ──────────────────────────────────────────────
+  score = clamp(score, 0, 100);
+
+  return {
+    score,
+    verdict: calculateVerdict(score),
+    flags: flags.slice(0, 10),
+    summary: buildFallbackSummary(score, flags),
+    details: {
+      aiAnalysis: buildFallbackAnalysis(score, riskFactors, positiveSignals),
+      riskFactors: riskFactors.slice(0, 10),
+      positiveSignals: positiveSignals.slice(0, 8),
+      confidence: 'low',
+      recommendations: recommendations.length > 0 ? recommendations : buildFallbackRecommendations(score),
+      aiProvider: 'fallback',
+      aiModel: 'local-keyword-analysis',
+      note: 'LLM API unavailable - analysis based on local keyword heuristics'
+    }
+  };
+}
+
+function buildFallbackSummary(score, flags) {
+  if (score < 40) return 'This site shows strong indicators of being a scam or phishing attempt. Exercise extreme caution.';
+  if (score < 70) return 'This site shows some suspicious signals. Proceed with caution and verify legitimacy independently.';
+  return 'This site appears to be legitimate based on available signals.';
+}
+
+function buildFallbackAnalysis(score, risks, positives) {
+  const parts = [];
+  if (score < 40) {
+    parts.push('Multiple significant risk indicators detected.');
+  } else if (score < 70) {
+    parts.push('Some risk factors identified but no definitive scam indicators.');
+  } else {
+    parts.push('Site appears legitimate based on analyzed signals.');
+  }
+  if (risks.length > 0) parts.push(`Risks: ${risks.slice(0, 3).join(', ')}.`);
+  if (positives.length > 0) parts.push(`Positives: ${positives.slice(0, 3).join(', ')}.`);
+  return parts.join(' ');
+}
+
+function buildFallbackRecommendations(score) {
+  if (score < 40) return ['Do NOT enter any personal information', 'Do not make payments', 'Close this website immediately'];
+  if (score < 70) return ['Verify the website independently before proceeding', 'Check for official contact methods', 'Avoid entering sensitive information'];
+  return ['Standard browsing precautions apply', 'Keep your browser and security software updated'];
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SYSTEM PROMPT (unchanged logic from original)
+// ═══════════════════════════════════════════════════════════════
 
 function buildSystemPrompt(data) {
   const rootDomain = extractRootDomain(data.url);
@@ -86,19 +429,16 @@ FALSE-POSITIVE PREVENTION RULES (CRITICAL):
 - No contact information on a personal blog, wiki, or non-commercial page is not suspicious.`;
 
   if (trusted) {
-    systemMsg += `
-
-IMPORTANT CONTEXT: The domain "${rootDomain}" is a well-known, established website. Unless the data shows it has been COMPROMISED (e.g., flagged in phishing/malware databases, injected content), your score should reflect this. Do NOT penalize trusted domains for standard features like login forms, cookie banners, analytics scripts, or marketing language. Score should be 85+ for trusted domains with no compromise indicators.`;
+    systemMsg += `\n\nIMPORTANT CONTEXT: The domain "${rootDomain}" is a well-known, established website. Unless the data shows it has been COMPROMISED (e.g., flagged in phishing/malware databases, injected content), your score should reflect this. Do NOT penalize trusted domains for standard features like login forms, cookie banners, analytics scripts, or marketing language. Score should be 85+ for trusted domains with no compromise indicators.`;
   }
 
-  systemMsg += `
-
-Return ONLY valid JSON, no markdown, no explanation outside the JSON.`;
-
+  systemMsg += `\n\nReturn ONLY valid JSON, no markdown, no explanation outside the JSON.`;
   return systemMsg;
 }
 
-// ── User Prompt ──────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  USER PROMPT (same as original)
+// ═══════════════════════════════════════════════════════════════
 
 function buildAdvancedPrompt(data) {
   const reviewSample = data.reviews?.slice(0, 8).join('\n- ') || 'None found';
@@ -106,7 +446,6 @@ function buildAdvancedPrompt(data) {
   const formFields = data.formFields?.join(', ') || 'None';
   const prices = data.prices?.join(', ') || 'None visible';
   const domainAgeDesc = describeDomainAge(data.domainAge);
-
   const pageStats = data.pageStats || {};
   const contact = data.contactInfo || {};
   const socials = data.socialLinks || [];
@@ -151,7 +490,6 @@ CONTENT ANALYSIS
 ══════════════════════════════════════════════════════════════
 Reviews: ${data.reviewCount || 0} found
 ${reviewSample !== 'None found' ? `Samples:\n- ${reviewSample}` : 'No reviews'}
-
 Prices: ${prices}
 Form Fields: ${formFields}
 Dark Patterns: ${darkPatterns}
@@ -192,7 +530,6 @@ ${(data.bodyText || '').slice(0, 1500)}
 INSTRUCTIONS
 ══════════════════════════════════════════════════════════════
 Return JSON with this exact structure:
-
 {
   "score": <integer 0-100>,
   "verdict": "<SAFE|SUSPICIOUS|SCAM>",
@@ -227,7 +564,27 @@ IMPORTANT — SCORE CALIBRATION:
 `;
 }
 
-// ── Helpers ──────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+function buildCacheKey(data) {
+  // Use domain + hash of relevant fields to build cache key
+  const domain = extractRootDomain(data.url) || data.url;
+  const hash = crypto.createHash('md5').update(JSON.stringify({
+    url: data.url,
+    hasSSL: data.hasSSL,
+    domainAge: data.domainAge,
+    isPhishing: data.isPhishing,
+    isMalicious: data.isMalicious,
+    bodyTextLen: (data.bodyText || '').length,
+  })).digest('hex');
+  return `${domain}:${hash}`;
+}
+
+function extractHostname(url) {
+  try { return new URL(url).hostname.toLowerCase(); } catch { return ''; }
+}
 
 function describeDomainAge(age) {
   if (age === null || age === undefined) return 'Unknown';
@@ -249,4 +606,4 @@ function clamp(val, min, max) {
   return Math.min(Math.max(val, min), max);
 }
 
-module.exports = { analyzeWithAI };
+module.exports = { analyzeWithAI, getCacheStats };

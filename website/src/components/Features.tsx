@@ -18,6 +18,18 @@ const features = [
     detail: 'patterns.detect(dom, { categories: 18 })',
   },
   {
+    tag: 'BRAND',
+    title: 'Brand Impersonation Detection',
+    description: 'Detects lookalike domains and pages impersonating trusted brands using fuzzy matching and visual analysis.',
+    detail: 'brand.check(domain, { fuzzy: true, levenshtein: 2 })',
+  },
+  {
+    tag: 'GRAMMAR',
+    title: 'Grammar & Sentiment Analysis',
+    description: 'Flags poor grammar, aggressive urgency, and manipulative language patterns common in scam content.',
+    detail: 'nlp.analyze(text, { grammar: true, sentiment: true })',
+  },
+  {
     tag: 'PHISH',
     title: 'Phishing Protection',
     description: 'Cross-references against PhishTank and Google Safe Browsing to catch known threats instantly.',
@@ -47,6 +59,18 @@ const features = [
     description: 'Overlays colored markers directly on the page to show exactly where dark patterns are hiding.',
     detail: 'overlay.highlight(issues, { color: "warn" })',
   },
+  {
+    tag: 'SOCIAL',
+    title: 'Social Engineering Detection',
+    description: 'Identifies phishing lures, urgent calls-to-action, impersonation attempts, and credential harvesting forms.',
+    detail: 'social.detect(page, { vector: "phishing" })',
+  },
+  {
+    tag: 'HISTORY',
+    title: 'Scan History & Analytics',
+    description: 'Track every scanned site with local storage. View trends, revisit scans, and monitor your browsing safety.',
+    detail: 'history.query({ limit: 200, sort: "date" })',
+  },
 ]
 
 export default function Features() {
@@ -57,11 +81,11 @@ export default function Features() {
         <div className="mb-16">
           <p className="section-label">// Features</p>
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">
-            Eight layers of protection
+            Twelve layers of protection
           </h2>
           <p className="text-neutral-400 max-w-lg text-sm">
             Every scan runs through multiple detection engines working in parallel 
-            to give you a comprehensive safety assessment.
+            to give you a comprehensive safety assessment. No stone left unturned.
           </p>
         </div>
 

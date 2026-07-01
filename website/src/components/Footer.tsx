@@ -1,19 +1,28 @@
+'use client'
+
 import Link from 'next/link'
+import { useState } from 'react'
 
 const links = {
   Product: [
     { label: 'Features', href: '/#features' },
     { label: 'Pricing', href: '/#pricing' },
+    { label: 'Demo', href: '/#demo' },
     { label: 'How It Works', href: '/#how-it-works' },
     { label: 'FAQ', href: '/#faq' },
+    { label: 'Testimonials', href: '/#testimonials' },
   ],
   Resources: [
     { label: 'Documentation', href: '/docs' },
     { label: 'API Reference', href: '/api-reference' },
     { label: 'Blog', href: '/blog' },
     { label: 'Changelog', href: '/changelog' },
+    { label: 'Install Guide', href: '/#install' },
+    { label: 'Comparison', href: '/#comparison' },
   ],
-  Legal: [
+  Company: [
+    { label: 'Contact', href: '/#contact' },
+    { label: 'Security', href: '/#security' },
     { label: 'Privacy Policy', href: '/privacy' },
     { label: 'Terms of Service', href: '/terms' },
     { label: 'Cookie Policy', href: '/cookies' },
@@ -21,12 +30,23 @@ const links = {
 }
 
 export default function Footer() {
+  const [email, setEmail] = useState('')
+  const [subscribed, setSubscribed] = useState(false)
+
+  const handleSubscribe = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (email) {
+      setSubscribed(true)
+      setEmail('')
+    }
+  }
+
   return (
     <footer className="relative border-t border-neutral-800/60">
       <div className="container-main py-12">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
-          {/* Brand */}
-          <div className="col-span-2 md:col-span-1">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
+          {/* Brand + Newsletter */}
+          <div className="col-span-2 md:col-span-2">
             <Link href="/" className="flex items-center gap-2 mb-3">
               <div className="w-5 h-5 rounded border border-accent/40 flex items-center justify-center bg-accent-muted">
                 <svg className="w-3 h-3 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -37,9 +57,36 @@ export default function Footer() {
                 IsThisLegit<span className="text-accent">?</span>
               </span>
             </Link>
-            <p className="text-xs text-neutral-500 leading-relaxed">
-              AI-powered scam, phishing &amp; dark pattern detection for Chrome.
+            <p className="text-xs text-neutral-500 leading-relaxed mb-4 max-w-xs">
+              AI-powered scam, phishing &amp; dark pattern detection for Chrome. Free, private, and open source.
             </p>
+
+            {/* Newsletter */}
+            <div className="max-w-xs">
+              <h4 className="text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-2">
+                Stay updated
+              </h4>
+              {subscribed ? (
+                <p className="text-xs text-accent font-mono">✓ Subscribed! Thanks for joining.</p>
+              ) : (
+                <form onSubmit={handleSubscribe} className="flex gap-1">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    required
+                    className="flex-1 px-2.5 py-1.5 rounded text-xs bg-surface-3 border border-neutral-700 text-neutral-300 placeholder-neutral-600 focus:outline-none focus:border-accent/40 font-mono"
+                  />
+                  <button
+                    type="submit"
+                    className="btn-accent text-[10px] py-1.5 px-3 whitespace-nowrap"
+                  >
+                    Subscribe
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
 
           {/* Links */}

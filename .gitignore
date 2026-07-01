@@ -9,3 +9,5 @@ website/.next/
 website/node_modules/
 *.zip
 *.tar.gz
+*.tsbuildinfo
+next-env.d.ts
