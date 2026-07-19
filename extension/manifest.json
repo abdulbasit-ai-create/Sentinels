@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Is This Legit?",
+  "name": "Sentinels",
   "version": "1.0.0",
-  "description": "Real-time scam, fake review & dark pattern detector for any website.",
+  "description": "AI-powered browser security guard — detects phishing, scams & dark patterns in real time.",
   "permissions": ["activeTab", "scripting", "storage", "tabs", "notifications"],
   "host_permissions": ["<all_urls>"],
   "content_security_policy": {
