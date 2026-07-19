@@ -1,7 +1,7 @@
 {
-  "name": "is-this-legit-backend",
+  "name": "sentinels-backend",
   "version": "1.0.0",
-  "description": "Backend API for Is This Legit? browser extension",
+  "description": "Backend API for Sentinels browser security extension",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
