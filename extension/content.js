@@ -1,5 +1,5 @@
 
-console.log('[IsThisLegit] Content script loaded on:', window.location.href);
+console.log('[Sentinels] Content script loaded on:', window.location.href);
 
 // ============================================================
 //  Core Scraper
@@ -169,7 +169,7 @@ function analyzeContentSignals() {
       return (w <= 1 && h <= 1) || style.display === 'none' || style.visibility === 'hidden';
     }).length;
   } catch (err) {
-    console.warn('[IsThisLegit] Content signal error:', err.message);
+    console.warn('[Sentinels] Content signal error:', err.message);
   }
 
   return signals;
@@ -709,7 +709,7 @@ function initHoverDetection() {
 
   // Create tooltip element
   _hoverTooltip = document.createElement('div');
-  _hoverTooltip.id = 'itl-hover-tooltip';
+  _hoverTooltip.id = 'sent-hover-tooltip';
   _hoverTooltip.style.cssText = `
     display: none; position: fixed; z-index: 2147483647;
     background: #1a1d26; color: #f0f2f5;
@@ -725,37 +725,37 @@ function initHoverDetection() {
 
   // Create styles
   _hoverStyles = document.createElement('style');
-  _hoverStyles.id = 'itl-hover-styles';
+  _hoverStyles.id = 'sent-hover-styles';
   _hoverStyles.textContent = `
-    .itl-suspicious-form {
+    .sent-suspicious-form {
       outline: 2px solid rgba(239, 68, 68, 0.5) !important;
       outline-offset: 2px !important;
       transition: outline-color 0.2s ease !important;
     }
-    .itl-suspicious-form:hover {
+    .sent-suspicious-form:hover {
       outline-color: rgba(239, 68, 68, 1) !important;
       background: rgba(239, 68, 68, 0.04) !important;
     }
-    .itl-suspicious-link {
+    .sent-suspicious-link {
       border-bottom: 2px dashed rgba(245, 158, 11, 0.5) !important;
       transition: border-color 0.2s ease !important;
     }
-    .itl-suspicious-link:hover {
+    .sent-suspicious-link:hover {
       border-bottom-color: rgba(245, 158, 11, 1) !important;
     }
-    .itl-mismatched-link {
+    .sent-mismatched-link {
       border-bottom: 2px dashed rgba(239, 68, 68, 0.6) !important;
       background: rgba(239, 68, 68, 0.05) !important;
     }
-    .itl-mismatched-link:hover {
+    .sent-mismatched-link:hover {
       border-bottom-color: rgba(239, 68, 68, 1) !important;
       background: rgba(239, 68, 68, 0.1) !important;
     }
-    .itl-credential-field {
+    .sent-credential-field {
       outline: 2px solid rgba(245, 158, 11, 0.4) !important;
       outline-offset: 1px !important;
     }
-    .itl-credential-field.credential-high {
+    .sent-credential-field.credential-high {
       outline-color: rgba(239, 68, 68, 0.5) !important;
     }
   `;
@@ -775,20 +775,20 @@ function initHoverDetection() {
 
   // ── Credential field hover ──
   document.querySelectorAll('input[type="password"], input[name*="card"], input[name*="ssn"], input[name*="cvv"]').forEach(field => {
-    field.classList.add('itl-credential-field');
+    field.classList.add('sent-credential-field');
     field.addEventListener('mouseenter', onCredentialFieldHover);
     field.addEventListener('mouseleave', hideHoverTooltip);
   });
 
   // MutationObserver for dynamically added elements
   const observer = new MutationObserver(() => {
-    document.querySelectorAll('form:not([data-itl-initialized])').forEach(form => {
-      form.setAttribute('data-itl-initialized', 'true');
+    document.querySelectorAll('form:not([data-sent-initialized])').forEach(form => {
+      form.setAttribute('data-sent-initialized', 'true');
       form.addEventListener('mouseenter', onFormHover);
       form.addEventListener('mouseleave', hideHoverTooltip);
     });
-    document.querySelectorAll('a[href]:not([data-itl-initialized])').forEach(link => {
-      link.setAttribute('data-itl-initialized', 'true');
+    document.querySelectorAll('a[href]:not([data-sent-initialized])').forEach(link => {
+      link.setAttribute('data-sent-initialized', 'true');
       link.addEventListener('mouseenter', onLinkHover);
       link.addEventListener('mouseleave', hideHoverTooltip);
     });
@@ -809,7 +809,7 @@ function onFormHover(e) {
   const warnings = [];
 
   if (hasPassword) {
-    form.classList.add('itl-suspicious-form');
+    form.classList.add('sent-suspicious-form');
     warnings.push('Contains password field');
     if (isCrossDomain) {
       warnings.push('⚠️ Form submits to DIFFERENT domain!');
@@ -848,7 +848,7 @@ function onLinkHover(e) {
   // External link check
   if (linkHostname && !linkHostname.includes(hostname)) {
     warnings.push(`External: ${linkHostname}`);
-    link.classList.add('itl-suspicious-link');
+    link.classList.add('sent-suspicious-link');
   }
 
   // Suspicious link patterns
@@ -856,7 +856,7 @@ function onLinkHover(e) {
   const hrefLower = href.toLowerCase();
   if (suspiciousTerms.some(t => hrefLower.includes(t))) {
     warnings.push('Contains suspicious URL parameters');
-    link.classList.add('itl-suspicious-link');
+    link.classList.add('sent-suspicious-link');
   }
 
   // Mismatched text and href
@@ -868,7 +868,7 @@ function onLinkHover(e) {
 
     if (mentionsTrusted && !goesToTrusted && !linkHostname.includes(hostname)) {
       warnings.push('⚠️ Text mentions trusted brand but link goes elsewhere!');
-      link.classList.add('itl-mismatched-link');
+      link.classList.add('sent-mismatched-link');
     }
   }
 
@@ -882,7 +882,7 @@ function onLinkHover(e) {
     const suspiciousTLDs = ['.xyz', '.top', '.club', '.online', '.click', '.link', '.download', '.review', '.win', '.bid'];
     if (suspiciousTLDs.some(tld => linkHostname.endsWith(tld))) {
       warnings.push(`Unusual TLD: ${linkHostname.split('.').pop()}`);
-      link.classList.add('itl-mismatched-link');
+      link.classList.add('sent-mismatched-link');
     }
   }
 
@@ -949,7 +949,7 @@ function showPageOverlay(verdict, score, flags, summary) {
   if (verdict === 'SAFE') return;
 
   const overlay = document.createElement('div');
-  overlay.id = 'itl-page-overlay';
+  overlay.id = 'sent-page-overlay';
   overlay.style.cssText = `
     position: fixed; inset: 0; z-index: 2147483646;
     display: flex; align-items: center; justify-content: center;
@@ -996,8 +996,8 @@ function showPageOverlay(verdict, score, flags, summary) {
       </div>
     ` : ''}
     <div style="display: flex; gap: 8px;">
-      <button id="itl-overlay-dismiss" style="flex: 1; padding: 10px; background: ${accentColor}; border: none; border-radius: 8px; color: white; font-weight: 600; font-size: 12px; cursor: pointer;">Dismiss</button>
-      <button id="itl-overlay-ignore" style="flex: 1; padding: 10px; background: transparent; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #a1a8ba; font-weight: 500; font-size: 12px; cursor: pointer;">Ignore for this page</button>
+      <button id="sent-overlay-dismiss" style="flex: 1; padding: 10px; background: ${accentColor}; border: none; border-radius: 8px; color: white; font-weight: 600; font-size: 12px; cursor: pointer;">Dismiss</button>
+      <button id="sent-overlay-ignore" style="flex: 1; padding: 10px; background: transparent; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #a1a8ba; font-weight: 500; font-size: 12px; cursor: pointer;">Ignore for this page</button>
     </div>
   `;
 
@@ -1005,26 +1005,26 @@ function showPageOverlay(verdict, score, flags, summary) {
   document.body.appendChild(overlay);
 
   // Add keyframes
-  if (!document.getElementById('itl-overlay-anim')) {
+  if (!document.getElementById('sent-overlay-anim')) {
     const style = document.createElement('style');
-    style.id = 'itl-overlay-anim';
+    style.id = 'sent-overlay-anim';
     style.textContent = `@keyframes itlOverlayIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }`;
     document.head.appendChild(style);
   }
 
   // Button handlers
-  document.getElementById('itl-overlay-dismiss')?.addEventListener('click', removePageOverlay);
-  document.getElementById('itl-overlay-ignore')?.addEventListener('click', () => {
+  document.getElementById('sent-overlay-dismiss')?.addEventListener('click', removePageOverlay);
+  document.getElementById('sent-overlay-ignore')?.addEventListener('click', () => {
     removePageOverlay();
     // Don't show again for this page (session storage)
     try {
-      sessionStorage.setItem('itl_ignore_' + window.location.href, 'true');
+      sessionStorage.setItem('sent_ignore_' + window.location.href, 'true');
     } catch (e) {}
   });
 }
 
 function removePageOverlay() {
-  document.getElementById('itl-page-overlay')?.remove();
+  document.getElementById('sent-page-overlay')?.remove();
 }
 
 // ============================================================
@@ -1032,10 +1032,10 @@ function removePageOverlay() {
 // ============================================================
 
 try {
-  console.log('[IsThisLegit] Setting up message listener');
+  console.log('[Sentinels] Setting up message listener');
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    console.log('[IsThisLegit] Message received:', msg.type);
+    console.log('[Sentinels] Message received:', msg.type);
 
     if (msg.type === 'PING') {
       sendResponse({ alive: true });
@@ -1045,12 +1045,12 @@ try {
     if (msg.type === 'SCRAPE') {
       try {
         const data = scrapePageData();
-        console.log('[IsThisLegit] Scraped successfully, reviews:', data.reviewCount, 'dark patterns:', data.darkPatterns.length,
+        console.log('[Sentinels] Scraped successfully, reviews:', data.reviewCount, 'dark patterns:', data.darkPatterns.length,
           'clickjacking:', data.clickjackingDetected?.clickjackingDetected,
           'mismatched links:', data.mismatchedLinks?.length);
         sendResponse({ success: true, data });
       } catch (err) {
-        console.error('[IsThisLegit] Scrape error:', err);
+        console.error('[Sentinels] Scrape error:', err);
         sendResponse({ success: false, error: err.message });
       }
     } else if (msg.type === 'HIGHLIGHT') {
@@ -1079,9 +1079,9 @@ function highlightSuspiciousElements(flags) {
   clearHighlights();
 
   const style = document.createElement('style');
-  style.id = 'itl-styles';
+  style.id = 'sent-styles';
   style.textContent = `
-    .itl-warning-banner {
+    .sent-warning-banner {
       position: fixed !important;
       top: 0 !important;
       left: 0 !important;
@@ -1098,23 +1098,23 @@ function highlightSuspiciousElements(flags) {
       box-shadow: 0 2px 12px rgba(239,68,68,0.35) !important;
       backdrop-filter: blur(8px) !important;
     }
-    .itl-suspicious-text {
+    .sent-suspicious-text {
       background: rgba(245, 158, 11, 0.15) !important;
       border-bottom: 2px solid rgba(245, 158, 11, 0.6) !important;
       border-radius: 2px !important;
       transition: background 0.2s ease !important;
     }
-    .itl-suspicious-text:hover {
+    .sent-suspicious-text:hover {
       background: rgba(245, 158, 11, 0.25) !important;
     }
-    .itl-dark-pattern {
+    .sent-dark-pattern {
       outline: 2px solid rgba(239, 68, 68, 0.7) !important;
       outline-offset: 2px !important;
       background: rgba(239, 68, 68, 0.06) !important;
       border-radius: 4px !important;
       transition: outline-color 0.2s ease !important;
     }
-    .itl-dark-pattern:hover {
+    .sent-dark-pattern:hover {
       outline-color: rgba(239, 68, 68, 1) !important;
       background: rgba(239, 68, 68, 0.12) !important;
     }
@@ -1123,31 +1123,31 @@ function highlightSuspiciousElements(flags) {
 
   if (flags && flags.length > 0) {
     const banner = document.createElement('div');
-    banner.className = 'itl-warning-banner';
-    banner.id = 'itl-banner';
-    const warningText = `⚠️ Is This Legit? detected ${flags.length} warning${flags.length > 1 ? 's' : ''} on this page`;
+    banner.className = 'sent-warning-banner';
+    banner.id = 'sent-banner';
+    const warningText = `🛡️ Sentinels detected ${flags.length} warning${flags.length > 1 ? 's' : ''} on this page`;
     banner.textContent = warningText;
     document.body.prepend(banner);
   }
 
   document.querySelectorAll('[class*="countdown"], [class*="timer"], [class*="limited-time"]').forEach(el => {
-    el.classList.add('itl-dark-pattern');
+    el.classList.add('sent-dark-pattern');
   });
 
   document.querySelectorAll('input[type="checkbox"]:checked').forEach(el => {
-    el.classList.add('itl-dark-pattern');
+    el.classList.add('sent-dark-pattern');
   });
 }
 
 function clearHighlights() {
-  document.getElementById('itl-styles')?.remove();
-  document.getElementById('itl-banner')?.remove();
-  document.querySelectorAll('.itl-warning-banner, .itl-suspicious-text, .itl-dark-pattern')
+  document.getElementById('sent-styles')?.remove();
+  document.getElementById('sent-banner')?.remove();
+  document.querySelectorAll('.sent-warning-banner, .sent-suspicious-text, .sent-dark-pattern')
     .forEach(el => {
-      el.classList.remove('itl-warning-banner', 'itl-suspicious-text', 'itl-dark-pattern');
+      el.classList.remove('sent-warning-banner', 'sent-suspicious-text', 'sent-dark-pattern');
     });
 }
 
 } catch (err) {
-  console.error('[IsThisLegit] Content script error:', err);
+  console.error('[Sentinels] Content script error:', err);
 }
