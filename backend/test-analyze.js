@@ -1,5 +1,5 @@
 // ============================================================
-//  Is This Legit? — Quick backend test
+//  Sentinels — Quick backend test
 //  Run: node backend/test-analyze.js
 // ============================================================
 
@@ -25,7 +25,7 @@ const testPayload = {
 };
 
 async function runTest() {
-  console.log('\n🔍 Is This Legit? — Backend Test\n');
+  console.log('\n🛡️ Sentinels — Backend Test\n');
   console.log('Testing with payload:', testPayload.url);
   console.log('---');
 
