@@ -1,19 +1,19 @@
 // ============================================================
-//  Is This Legit? — background.js (Service Worker)
+//  Sentinels — background.js (Service Worker)
 //  Relays messages between popup and content script
 //  Inline scraper synced with content.js enhanced signals
 //  UPGRADED: IndexedDB, real-time URL checks, whitelist/blacklist,
-//  notifications, enhanced badge, severity thresholds
+//  notifications, enhanced badge, severity thresholds, ELI5
 // ============================================================
 
 // ── Configuration ────────────────────────────────────────────────
 const DEFAULT_BACKEND_URL = 'http://localhost:3001';
 const CONFIG_KEYS = {
-  apiKey: 'itl_api_key',
-  backendUrl: 'itl_backend_url',
-  severityThreshold: 'itl_severity_threshold',
-  autoScan: 'itl_auto_scan',
-  showNotifications: 'itl_show_notifications'
+  apiKey: 'sent_api_key',
+  backendUrl: 'sent_backend_url',
+  severityThreshold: 'sent_severity_threshold',
+  autoScan: 'sent_auto_scan',
+  showNotifications: 'sent_show_notifications'
 };
 
 let _apiKey = '';
@@ -23,7 +23,7 @@ let _autoScan = true;
 let _showNotifications = true;
 
 // ── IndexedDB Setup ─────────────────────────────────────────────
-const DB_NAME = 'itl_reports';
+const DB_NAME = 'sent_reports';
 const DB_VERSION = 2;
 
 function openDB() {
@@ -84,7 +84,7 @@ async function dbStoreReport(report) {
       tx.onerror = reject;
     });
   } catch (err) {
-    console.error('[IsThisLegit] IndexedDB store report error:', err);
+    console.error('[Sentinels] IndexedDB store report error:', err);
   }
 }
 
@@ -107,7 +107,7 @@ async function dbStoreWarning(entry) {
       tx.onerror = reject;
     });
   } catch (err) {
-    console.error('[IsThisLegit] IndexedDB store warning error:', err);
+    console.error('[Sentinels] IndexedDB store warning error:', err);
   }
 }
 
@@ -133,7 +133,7 @@ async function dbGetReports(filter = {}) {
     });
     return all;
   } catch (err) {
-    console.error('[IsThisLegit] IndexedDB get reports error:', err);
+    console.error('[Sentinels] IndexedDB get reports error:', err);
     return [];
   }
 }
@@ -160,7 +160,7 @@ async function dbGetWarnings(limit = 100) {
     });
     return all;
   } catch (err) {
-    console.error('[IsThisLegit] IndexedDB get warnings error:', err);
+    console.error('[Sentinels] IndexedDB get warnings error:', err);
     return [];
   }
 }
@@ -319,7 +319,7 @@ async function loadConfig() {
   _severityThreshold = data[CONFIG_KEYS.severityThreshold] || 40;
   _autoScan = data[CONFIG_KEYS.autoScan] !== false;
   _showNotifications = data[CONFIG_KEYS.showNotifications] !== false;
-  console.log('[IsThisLegit] Background loaded, API_BASE:', _apiBase,
+  console.log('[Sentinels] Background loaded, API_BASE:', _apiBase,
     'Key configured:', !!_apiKey,
     'Threshold:', _severityThreshold,
     'AutoScan:', _autoScan);
@@ -374,7 +374,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
-  console.log('[IsThisLegit] Message received:', msg.type);
+  console.log('[Sentinels] Message received:', msg.type);
 
   // ── IndexedDB Operations ──
   if (msg.type === 'GET_REPORTS') {
@@ -504,7 +504,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }).then(() => {
       sendResponse({ success: true });
     }).catch(err => {
-      console.error('[IsThisLegit] Highlight error:', err);
+      console.error('[Sentinels] Highlight error:', err);
       sendResponse({ success: false, error: 'Failed to highlight page' });
     });
     return true;
@@ -533,7 +533,7 @@ async function handleFalseReport(type, msg) {
     // Send to backend if configured
     if (_apiBase) {
       const headers = { 'Content-Type': 'application/json' };
-      if (_apiKey) headers['X-ITL-Key'] = _apiKey;
+      if (_apiKey) headers['X-Sentinels-Key'] = _apiKey;
       await fetch(`${_apiBase}/api/feedback`, {
         method: 'POST',
         headers,
@@ -543,7 +543,7 @@ async function handleFalseReport(type, msg) {
     // Also store locally
     await dbSetSetting(`feedback_${Date.now()}`, JSON.stringify(payload));
   } catch (err) {
-    console.error('[IsThisLegit] Feedback error:', err);
+    console.error('[Sentinels] Feedback error:', err);
   }
 }
 
@@ -558,7 +558,7 @@ async function deleteReport(reportId) {
       tx.onerror = reject;
     });
   } catch (err) {
-    console.error('[IsThisLegit] Delete report error:', err);
+    console.error('[Sentinels] Delete report error:', err);
   }
 }
 
@@ -592,7 +592,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   }
 
   // Auto-analyze the page
-  console.log('[IsThisLegit] Auto-analyzing tab:', tabId, tab.url);
+  console.log('[Sentinels] Auto-analyzing tab:', tabId, tab.url);
   try {
     const result = await new Promise((resolve, reject) => {
       chrome.tabs.sendMessage(tabId, { type: 'PING' }, response => {
@@ -620,7 +620,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     // Do the analysis
     await autoAnalyzeTab(tabId, tab.url);
   } catch (err) {
-    console.error('[IsThisLegit] Auto-analyze error:', err);
+    console.error('[Sentinels] Auto-analyze error:', err);
   }
 });
 
@@ -634,7 +634,7 @@ async function autoAnalyzeTab(tabId, url) {
   if (!scrapeResult?.success) return;
 
   const headers = { 'Content-Type': 'application/json' };
-  if (_apiKey) headers['X-ITL-Key'] = _apiKey;
+  if (_apiKey) headers['X-Sentinels-Key'] = _apiKey;
 
   try {
     const response = await fetch(`${_apiBase}/api/analyze`, {
@@ -682,7 +682,7 @@ async function autoAnalyzeTab(tabId, url) {
     });
 
   } catch (err) {
-    console.error('[IsThisLegit] Auto-analyze fetch error:', err);
+    console.error('[Sentinels] Auto-analyze fetch error:', err);
   }
 }
 
@@ -700,18 +700,18 @@ function updateBadge(tabId, score, verdict) {
   // Set badge title with details
   chrome.action.setTitle({
     tabId,
-    title: `Is This Legit? — ${verdict} (${score}/100)`
+    title: `Sentinels — ${verdict} (${score}/100)`
   });
 }
 
 // ── Chrome Notification System ─────────────────────────────────
 function showChromeNotification(tabId, url, message, verdict) {
-  const notificationId = `itl_warn_${tabId}_${Date.now()}`;
+  const notificationId = `sent_warn_${tabId}_${Date.now()}`;
 
   chrome.notifications.create(notificationId, {
     type: 'basic',
     iconUrl: 'icons/icon128.png',
-    title: `Is This Legit? — ${verdict}`,
+    title: `Sentinels — ${verdict}`,
     message: message.slice(0, 250),
     priority: verdict === 'SCAM' ? 2 : 1,
     buttons: [
@@ -748,11 +748,11 @@ function showChromeNotification(tabId, url, message, verdict) {
 
 // ── Main Analysis Handler ──────────────────────────────────────
 async function handleAnalysis(tabId, sendResponse, isAutoScan) {
-  console.log('[IsThisLegit] Starting analysis for tab:', tabId);
+  console.log('[Sentinels] Starting analysis for tab:', tabId);
 
   try {
     const tab = await chrome.tabs.get(tabId);
-    console.log('[IsThisLegit] Tab URL:', tab.url, 'Status:', tab.status);
+    console.log('[Sentinels] Tab URL:', tab.url, 'Status:', tab.status);
 
     if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('about:')) {
       sendResponse({ success: false, error: 'Cannot scan Chrome internal pages. Try a regular website instead.' });
@@ -760,7 +760,7 @@ async function handleAnalysis(tabId, sendResponse, isAutoScan) {
     }
 
     if (tab.status !== 'complete') {
-      console.log('[IsThisLegit] Waiting for page to finish loading...');
+      console.log('[Sentinels] Waiting for page to finish loading...');
       try {
         await waitForTabComplete(tabId, 20000);
       } catch (waitErr) {
@@ -817,7 +817,7 @@ async function handleAnalysis(tabId, sendResponse, isAutoScan) {
     }
 
     // Use chrome.scripting.executeScript to run scrape directly
-    console.log('[IsThisLegit] Executing script in tab:', tabId);
+    console.log('[Sentinels] Executing script in tab:', tabId);
 
     let scrapeResult;
     try {
@@ -1160,13 +1160,13 @@ async function handleAnalysis(tabId, sendResponse, isAutoScan) {
       });
 
       scrapeResult = { success: true, data: results[0].result };
-      console.log('[IsThisLegit] Scrape success:', scrapeResult.data.reviewCount, 'reviews,', scrapeResult.data.darkPatterns.length, 'dark patterns');
+      console.log('[Sentinels] Scrape success:', scrapeResult.data.reviewCount, 'reviews,', scrapeResult.data.darkPatterns.length, 'dark patterns');
 
     } catch (scrapeErr) {
-      console.error('[IsThisLegit] Scrape error:', scrapeErr.message);
+      console.error('[Sentinels] Scrape error:', scrapeErr.message);
 
       // ── Retry: re-inject content script and try SCRAPE via messaging ──
-      console.log('[IsThisLegit] Attempting fallback via content script injection...');
+      console.log('[Sentinels] Attempting fallback via content script injection...');
       try {
         await chrome.scripting.executeScript({
           target: { tabId },
@@ -1177,13 +1177,13 @@ async function handleAnalysis(tabId, sendResponse, isAutoScan) {
         const fallbackResult = await chrome.tabs.sendMessage(tabId, { type: 'SCRAPE' });
         if (fallbackResult?.success) {
           scrapeResult = fallbackResult;
-          console.log('[IsThisLegit] Fallback scrape succeeded');
+          console.log('[Sentinels] Fallback scrape succeeded');
         } else {
           sendResponse({ success: false, error: 'Failed to scrape page. The page may restrict extensions.' });
           return;
         }
       } catch (retryErr) {
-        console.error('[IsThisLegit] Fallback scrape also failed:', retryErr.message);
+        console.error('[Sentinels] Fallback scrape also failed:', retryErr.message);
         sendResponse({ success: false, error: 'Failed to scrape page. The page may restrict extensions.' });
         return;
       }
@@ -1195,9 +1195,9 @@ async function handleAnalysis(tabId, sendResponse, isAutoScan) {
     }
 
     // Send to backend
-    console.log('[IsThisLegit] Sending to backend:', _apiBase);
+    console.log('[Sentinels] Sending to backend:', _apiBase);
     const headers = { 'Content-Type': 'application/json' };
-    if (_apiKey) headers['X-ITL-Key'] = _apiKey;
+    if (_apiKey) headers['X-Sentinels-Key'] = _apiKey;
 
     const response = await fetch(`${_apiBase}/api/analyze`, {
       method: 'POST',
@@ -1212,7 +1212,7 @@ async function handleAnalysis(tabId, sendResponse, isAutoScan) {
     }
 
     const result = await response.json();
-    console.log('[IsThisLegit] Analysis result:', result.verdict, result.score);
+    console.log('[Sentinels] Analysis result:', result.verdict, result.score);
 
     // Store in IndexedDB
     await dbStoreReport(result);
@@ -1251,7 +1251,7 @@ async function handleAnalysis(tabId, sendResponse, isAutoScan) {
     sendResponse({ success: true, result });
 
   } catch (err) {
-    console.error('[IsThisLegit] Analysis error:', err);
+    console.error('[Sentinels] Analysis error:', err);
     const safeMsg = (err.message || '').includes('Backend error')
       ? 'Backend is unreachable or returned an error. Is the server running?'
       : (err.message || '').includes('fetch')
@@ -1294,12 +1294,12 @@ chrome.storage.onChanged.addListener((changes) => {
 
 // ── Installation & Startup ──────────────────────────────────────
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('[IsThisLegit] Extension installed');
+  console.log('[Sentinels] Extension installed');
   // Initialize IndexedDB
-  openDB().then(() => console.log('[IsThisLegit] IndexedDB initialized')).catch(err => console.error('[IsThisLegit] IndexedDB init error:', err));
+  openDB().then(() => console.log('[Sentinels] IndexedDB initialized')).catch(err => console.error('[Sentinels] IndexedDB init error:', err));
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  console.log('[IsThisLegit] Extension started');
+  console.log('[Sentinels] Extension started');
   loadConfig();
 });
