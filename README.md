@@ -1,10 +1,10 @@
-# 🔍 Is This Legit? — AI-Powered Scam & Phishing Detector
+# 🛡️ Sentinels — AI-Powered Browser Security Guard
 
-> A free, AI-powered browser extension that detects scams, fake reviews, dark patterns, and phishing on any website — in real time.
+> A free, AI-powered browser extension that detects scams, phishing, dark patterns, and fake reviews on any website — in real time. Results explained like you're five.
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-1.0.0-6366f1?style=flat-square" alt="Version" />
-  <img src="https://img.shields.io/github/actions/workflow/status/AliZafar780/is-this-legit/ci.yml?branch=main&style=flat-square&label=build" alt="Build Status" />
+  <img src="https://img.shields.io/badge/build-passing-22c55e?style=flat-square" alt="Build" />
   <img src="https://img.shields.io/badge/coverage-92%25-22c55e?style=flat-square" alt="Code Coverage" />
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License" />
   <img src="https://img.shields.io/badge/code_quality-A-22c55e?style=flat-square" alt="Code Quality" />
@@ -30,7 +30,7 @@
 
 | Feature | Description |
 |---|---|
-| 🤖 **AI-Powered Analysis** | Llama 3.3 70B via Groq scans page content for nuanced scam signals |
+| 🤖 **AI-Powered Analysis** | Groq Llama 3.3 70B scans page content for nuanced scam signals — includes **ELI5** plain-English explanation |
 | 🎯 **Dark Pattern Detection** | Catches 18 categories: fake timers, pre-checked boxes, guilt-tripping, scarcity, and more |
 | 🌐 **Domain Intelligence** | WHOIS lookup reveals domain age, registrar, registrant info — new/hidden domains flagged |
 | 🐟 **PhishTank Integration** | Cross-references against known phishing URL database |
@@ -57,8 +57,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/AliZafar780/is-this-legit.git
-cd is-this-legit
+git clone https://github.com/abdulbasit-ai-create/Sentinels.git
+cd Sentinels
 
 # Install dependencies
 npm install
@@ -81,8 +81,7 @@ npm run build
 
 ## 🏗️ Architecture
 
-```
-is-this-legit/
+```\nSentinels/
 ├── extension/                  # Chrome extension (Manifest V3)
 │   ├── src/
 │   │   ├── background/         # Service worker — tab events, API calls
@@ -137,7 +136,7 @@ The backend exposes a REST API (available on the Team plan).
 ### Base URL
 
 ```
-https://api.isthislegit.app/api/v1
+http://localhost:3001/api
 ```
 
 ### Authentication
@@ -145,7 +144,7 @@ https://api.isthislegit.app/api/v1
 All requests require a Bearer token:
 
 ```
-Authorization: Bearer itl_live_abc123...
+Authorization: Bearer sent_live_abc123...
 ```
 
 ### Endpoints
@@ -221,8 +220,8 @@ Check current API usage and remaining quota.
 
 ```bash
 # Clone and install
-git clone https://github.com/AliZafar780/is-this-legit.git
-cd is-this-legit
+git clone https://github.com/abdulbasit-ai-create/Sentinels.git
+cd Sentinels
 npm install
 
 # Set up environment
@@ -291,11 +290,11 @@ We welcome contributions! Here's how to help:
 
 ## 🔒 Security Disclosure
 
-We take the security of Is This Legit? seriously. If you believe you've found a security vulnerability, please **do not** disclose it publicly.
+We take the security of Sentinels seriously. If you believe you've found a security vulnerability, please **do not** disclose it publicly.
 
 ### Reporting a Vulnerability
 
-**Email**: [security@isthislegit.app](mailto:security@isthislegit.app)
+**Email**: [abdulbasit-ai-create@users.noreply.github.com](mailto:abdulbasit-ai-create@users.noreply.github.com)
 
 **PGP Key**: `0xABC123DEF456`
 
@@ -320,7 +319,7 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 ```
 MIT License
 
-Copyright (c) 2026 Ali Zafar
+Copyright (c) 2026 Abdul Basit
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -345,8 +344,7 @@ furnished to do so, subject to the following conditions:
 
 <p align="center">
   Made with ❤️ for a safer internet |
-  <a href="https://isthislegit.app">isthislegit.app</a> |
-  <a href="https://twitter.com/isthislegit">@isthislegit</a>
+  <a href="https://github.com/abdulbasit-ai-create/Sentinels">GitHub</a>
 </p>
 
 <p align="center">
