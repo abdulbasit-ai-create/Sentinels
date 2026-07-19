@@ -1,8 +1,8 @@
 // ============================================================
-//  Is This Legit? — popup.js
+//  Sentinels — popup.js
 //  UPGRADED: collapsible panels, whitelist/blacklist UI,
 //  settings management, false reporting, history search/filter,
-//  IndexedDB integration, threat breakdown bars
+//  IndexedDB integration, threat breakdown bars, ELI5
 // ============================================================
 
 let currentTabId = null;
@@ -13,8 +13,8 @@ let whitelistData = [];
 let blacklistData = [];
 let settingsData = {};
 
-const STORAGE_KEY = 'itl_scan_history';
-const THEME_KEY = 'itl_theme';
+const STORAGE_KEY = 'sent_scan_history';
+const THEME_KEY = 'sent_theme';
 const MAX_HISTORY = 100;
 
 // ========== Theme Management ==========
@@ -201,10 +201,10 @@ async function loadSettingsData() {
 async function loadSettingsUI() {
   // API settings
   const data = await new Promise(resolve => {
-    chrome.storage.local.get(['itl_backend_url', 'itl_api_key'], resolve);
+    chrome.storage.local.get(['sent_backend_url', 'sent_api_key'], resolve);
   });
-  if (data.itl_backend_url) document.getElementById('settingBackendUrl').value = data.itl_backend_url;
-  if (data.itl_api_key) document.getElementById('settingApiKey').value = data.itl_api_key;
+  if (data.sent_backend_url) document.getElementById('settingBackendUrl').value = data.sent_backend_url;
+  if (data.sent_api_key) document.getElementById('settingApiKey').value = data.sent_api_key;
 
   // Severity threshold
   const threshold = settingsData.severityThreshold || 40;
@@ -806,6 +806,9 @@ function renderResult(result) {
   // ── Render Recommendations ──
   renderRecommendations(result);
 
+  // ── Render ELI5 ──
+  renderEli5(result);
+
   // ── Domain Intelligence ──
   const sslEl = document.getElementById('sslStatus');
   sslEl.textContent = hasSSL ? 'Secure' : 'No SSL';
@@ -1042,6 +1045,39 @@ function renderFlags(flags) {
     div.appendChild(textSpan);
     container.appendChild(div);
   });
+}
+
+// ── ELI5 (Explain Like I'm 5) ──
+function renderEli5(result) {
+  const container = document.getElementById('eli5Body');
+  if (!container) return;
+
+  const eli5 = result.eli5 || generateEli5Fallback(result.score, result.verdict, result.flags || []);
+  container.textContent = eli5;
+
+  // Open ELI5 for suspicious/scam results
+  const collapse = document.getElementById('eli5Collapse');
+  if (collapse && result.verdict !== 'SAFE') {
+    collapse.classList.add('open');
+  }
+}
+
+function generateEli5Fallback(score, verdict, flags) {
+  if (verdict === 'SAFE' || score >= 70) {
+    return 'This website looks safe! Think of it like a store in a busy mall \u2014 it has proper licenses, security cameras, and has been around long enough that other people trust it. You can browse and shop here normally.';
+  }
+  if (verdict === 'SCAM' || score < 40) {
+    let reasons = '';
+    if (flags.length > 0) {
+      reasons = ' Red flags we found: ' + flags.slice(0, 3).join(', ') + '.';
+    }
+    return 'This website is acting suspiciously \u2014 like a street vendor who won\'t show their ID, asks for your credit card upfront, and keeps looking over their shoulder.' + reasons + ' Our advice: close this tab and don\'t share any personal info.';
+  }
+  let reasons = '';
+  if (flags.length > 0) {
+    reasons = ' Things that seem off: ' + flags.slice(0, 2).join(', ') + '.';
+  }
+  return 'This website gives mixed signals \u2014 like a store with a proper sign but a broken lock on the door.' + reasons + ' We recommend being careful: don\'t enter passwords or payment details until you\'re sure it\'s legit.';
 }
 
 // ========== Highlights ==========
