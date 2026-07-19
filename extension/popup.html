@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Is This Legit?</title>
+<title>Sentinels</title>
 <style>
   /* ========== Theme Variables ========== */
   :root { --transition: 0.25s ease; }
@@ -610,8 +610,8 @@
   <!-- Header -->
   <div class="header">
     <div class="header-left">
-      <div class="logo">ITL</div>
-      <div class="brand-title">Is This Legit?</div>
+      <div class="logo" style="background:linear-gradient(135deg,var(--accent),#06b6d4);">S</div>
+      <div class="brand-title">Sentinels</div>
     </div>
     <button class="theme-toggle" id="themeToggle" title="Toggle theme">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="themeIcon">
@@ -653,7 +653,7 @@
           </svg>
         </div>
         <div class="welcome-title">Ready to Scan</div>
-        <div class="welcome-desc">Click the button above to analyze this page for scams, phishing, and dark patterns.</div>
+        <div class="welcome-desc">Click the button above to analyze this page for scams, phishing, and dark patterns. Results explained in plain English.</div>
       </div>
 
       <div class="loading" id="loadingState">
@@ -703,6 +703,18 @@
             <span class="chevron">▼</span>
           </div>
           <div class="collapsible-body" id="threatBreakdownBody"></div>
+        </div>
+
+        <!-- ELI5 (Explain Like I'm 5) -->
+        <div class="collapsible" id="eli5Collapse">
+          <div class="collapsible-header">
+            <span class="left">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Explain Like I'm 5
+            </span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="collapsible-body" id="eli5Body" style="font-size:13px;line-height:1.6;color:var(--text-primary);padding:10px 12px 12px;"></div>
         </div>
 
         <!-- Detected Issues (collapsible) -->
@@ -868,7 +880,7 @@
 
   <!-- Footer -->
   <div class="footer">
-    <span>Is This Legit v1.0</span>
+    <span>Sentinels v1.0</span>
     <span id="footerStatus">Ready</span>
   </div>
 
