@@ -171,6 +171,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('reportFalsePositiveBtn')?.addEventListener('click', () => reportFeedback('false_positive'));
   document.getElementById('reportFalseNegativeBtn')?.addEventListener('click', () => reportFeedback('false_negative'));
 
+  // Quick Answer buttons
+  document.querySelectorAll('.qa-btn').forEach(btn => {
+    btn.addEventListener('click', () => answerQuickQuestion(parseInt(btn.dataset.q)));
+  });
+
+  // Report buttons
+  document.getElementById('reportBtn')?.addEventListener('click', showReport);
+  document.getElementById('reportClose')?.addEventListener('click', closeReport);
+  document.getElementById('reportCloseBtn')?.addEventListener('click', closeReport);
+  document.getElementById('reportCopyBtn')?.addEventListener('click', copyReport);
+
   // Navigation
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => switchPanel(btn.dataset.target));
@@ -804,6 +815,12 @@ function renderResult(result) {
   // ── Actions (What should I do) ──
   renderActions(result);
 
+  // ── Quick Answers ──
+  renderQuickAnswers(result);
+
+  // ── Safety Checklist ──
+  renderSafetyChecklist(result);
+
   // ── Red Flags Count ──
   const redflagsCount = document.getElementById('redflagsCount');
   const redflags = result.redFlags || [];
@@ -1311,6 +1328,9 @@ function hideAll() {
   document.getElementById('explanationBox') && (document.getElementById('explanationBox').style.display = 'none');
   document.getElementById('realWorldCard') && (document.getElementById('realWorldCard').style.display = 'none');
   document.getElementById('actionsSection') && (document.getElementById('actionsSection').style.display = 'none');
+  document.getElementById('quickAnswersSection') && (document.getElementById('quickAnswersSection').style.display = 'none');
+  document.getElementById('qaAnswer') && (document.getElementById('qaAnswer').style.display = 'none');
+  document.getElementById('reportModal') && (document.getElementById('reportModal').style.display = 'none');
 }
 
 function updateFooter(text, color) {
@@ -1362,4 +1382,220 @@ async function getCachedResult(tabId, url) {
       }
     });
   });
+}
+
+// ========== Feature: Quick Answers ==========
+
+function renderQuickAnswers(result) {
+  const section = document.getElementById('quickAnswersSection');
+  if (!section) return;
+  section.style.display = 'block';
+  const answer = document.getElementById('qaAnswer');
+  if (answer) answer.style.display = 'none';
+}
+
+function answerQuickAnswer(idx) {
+  if (!lastResult) return;
+  const answer = document.getElementById('qaAnswer');
+  if (!answer) return;
+
+  const r = lastResult;
+  const questions = [
+    function() {
+      const v = r.verdict === 'SAFE' ? 'not suspicious' : r.verdict === 'SUSPICIOUS' ? 'shows some warning signs' : 'highly suspicious';
+      let txt = `This site is rated **${v}** (${r.score}/100). ${r.summary || ''}`;
+      if (r.flags && r.flags.length > 0) {
+        txt += '\n\nKey concerns:\n' + r.flags.slice(0, 4).map(f => '• ' + f).join('\n');
+      }
+      if (r.explanation) txt += '\n\n' + r.explanation;
+      return txt;
+    },
+    function() {
+      if (!r.hasSSL) return '⚠️ No — this site does not use HTTPS (SSL), meaning any password you enter could be intercepted by third parties. Do NOT enter passwords here.';
+      if (r.verdict === 'SCAM' || r.score < 40) return '🔴 No — this site is classified as a scam. Any password you enter will likely be stolen. Close this page immediately.';
+      if (r.verdict === 'SUSPICIOUS') {
+        let txt = '🟡 Be cautious — this site is suspicious.';
+        const hasPasswordForm = r.flags && r.flags.some(f => f.toLowerCase().includes('password') || f.toLowerCase().includes('credential') || f.toLowerCase().includes('login'));
+        if (hasPasswordForm) txt += ' We detected password fields, and the site has warning signs. Consider changing your password elsewhere if you reuse it.';
+        txt += ' Only enter your password if you are absolutely sure this is the correct website.';
+        return txt;
+      }
+      return '✅ This site appears safe (HTTPS + trusted verdict). Entering your password should be fine, but always verify you are on the correct website URL before typing.';
+    },
+    function() {
+      if (!r.hasSSL) return '⚠️ No — this site lacks HTTPS encryption. Credit card data would be sent in plain text. Never enter payment info here.';
+      if (r.verdict === 'SCAM' || r.score < 40) return '🔴 Absolutely not — this site is flagged as a scam. Entering card details here will likely result in fraud.';
+      if (r.verdict === 'SUSPICIOUS') return '🟡 Proceed with extreme caution. The site has warning signs. Verify the business independently and check your bank statement after any purchase.';
+      if (r.domainAge != null && r.domainAge < 90) return '🟡 The domain is relatively new (' + formatDomainAgeFallback(r.domainAge) + '). While the scan passed, newer sites carry more risk for card payments.';
+      return '✅ The site passed our security checks. Entering card details should be safe, but always verify the URL and check for "https://" in the address bar.';
+    },
+    function() {
+      if (r.verdict === 'SCAM') return 'Tell them: "This website is a scam. It scored ' + r.score + '/100 and shows clear signs of fraud. Block the site and do not share any personal information."';
+      if (r.verdict === 'SUSPICIOUS') return 'Tell them: "This site scored ' + r.score + '/100 — some warning signs came up. Be very careful: do not enter passwords, credit cards, or personal details until you verify it is legitimate."';
+      if (r.score >= 80) return 'Tell them: "This site looks safe (scored ' + r.score + '/100). It uses HTTPS and seems legitimate. Normal browsing and shopping should be fine."';
+      return 'Tell them: "This site scored ' + r.score + '/100. It seems okay but not perfect — use common sense, check the URL carefully, and avoid sharing sensitive info without double-checking."';
+    },
+    function() {
+      const actions = r.actions || ['Use common sense'];
+      const recs = (r.details && r.details.recommendations) || [];
+      let txt = 'Recommended actions for this site:\n\n';
+      txt += actions.map(a => '• ' + a).join('\n');
+      if (recs.length > 0) txt += '\n\nAdditional tips:\n' + recs.map(a => '• ' + a).join('\n');
+      if (r.flags && r.flags.length > 0) txt += '\n\n⚠️ Issues to watch:\n' + r.flags.slice(0, 3).map(f => '• ' + f).join('\n');
+      return txt;
+    }
+  ];
+
+  const answerText = questions[idx]();
+  const escaped = escapeHtml(answerText);
+  answer.innerHTML = '<strong>' + escapeHtml(document.querySelector('.qa-btn[data-q="' + idx + '"]')?.textContent.trim() || 'Answer') + '</strong><br>' + escaped.replace(/\n/g, '<br>');
+  answer.style.display = 'block';
+}
+
+// ========== Feature: Safety Checklist ==========
+
+const CHECKLIST_STORAGE_KEY = 'sent_checklist_state';
+let checklistState = {};
+
+async function loadChecklistState() {
+  return new Promise(resolve => {
+    chrome.storage.local.get([CHECKLIST_STORAGE_KEY], data => {
+      checklistState = data[CHECKLIST_STORAGE_KEY] || {};
+      resolve();
+    });
+  });
+}
+
+async function saveChecklistState() {
+  return new Promise(resolve => {
+    chrome.storage.local.set({ [CHECKLIST_STORAGE_KEY]: checklistState }, resolve);
+  });
+}
+
+function getChecklistItems(result) {
+  return [
+    { id: 'ssl', label: 'Connection is secure (HTTPS/SSL)', auto: !!result.hasSSL },
+    { id: 'domain_age', label: 'Domain is well-established (30+ days)', auto: result.domainAge != null && result.domainAge > 30 },
+    { id: 'contact', label: 'Contact information is available', auto: result.reviewCount > 0 || (result.flags && result.flags.some(f => f.toLowerCase().includes('contact'))) },
+    { id: 'privacy', label: 'Privacy policy is visible on site', auto: false },
+    { id: 'reviews', label: 'Customer reviews are visible', auto: result.reviewCount > 0 },
+    { id: 'no_urgency', label: 'No high-pressure urgency tactics detected', auto: result.flags ? !result.flags.some(f => /countdown|urgency|limited|hurry/i.test(f)) : true },
+    { id: 'url_match', label: 'URL matches the brand/company name', auto: false }
+  ];
+}
+
+async function renderSafetyChecklist(result) {
+  const body = document.getElementById('checklistBody');
+  const progressEl = document.getElementById('checklistProgress');
+  if (!body || !progressEl) return;
+
+  await loadChecklistState();
+  const items = getChecklistItems(result);
+  const pageKey = 'checklist_' + (result.url || 'unknown');
+  const pageState = checklistState[pageKey] || {};
+
+  items.forEach(item => {
+    if (item.auto && pageState[item.id] === undefined) {
+      pageState[item.id] = true;
+    }
+  });
+  checklistState[pageKey] = pageState;
+
+  const doneCount = items.filter(i => pageState[i.id]).length;
+  progressEl.textContent = doneCount + '/' + items.length;
+  progressEl.className = 'count-badge ' + (doneCount === items.length ? 'safe' : doneCount > items.length / 2 ? 'warn' : '');
+
+  body.innerHTML = '';
+  items.forEach(item => {
+    const checked = !!pageState[item.id];
+    const div = document.createElement('div');
+    div.className = 'checklist-item' + (checked ? ' done' : '');
+    div.innerHTML = '<div class="checklist-cb ' + (checked ? 'checked' : '') + '" data-cbid="' + item.id + '"></div><span class="checklist-label">' + escapeHtml(item.label) + '</span>';
+    div.addEventListener('click', async () => {
+      const currentState = checklistState[pageKey] || {};
+      currentState[item.id] = !currentState[item.id];
+      checklistState[pageKey] = currentState;
+      await saveChecklistState();
+      renderSafetyChecklist(result);
+    });
+    body.appendChild(div);
+  });
+}
+
+// ========== Feature: One-Click Safety Report ==========
+
+function showReport() {
+  if (!lastResult) return;
+  const modal = document.getElementById('reportModal');
+  const body = document.getElementById('reportBody');
+  if (!modal || !body) return;
+
+  const r = lastResult;
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const dateStr = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate()) + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+
+  const flagSection = (r.flags && r.flags.length > 0)
+    ? r.flags.map(f => '⚠ ' + f).join('\n')
+    : '✓ No issues detected';
+
+  const recSection = (r.details && r.details.recommendations && r.details.recommendations.length > 0)
+    ? r.details.recommendations.map(rec => '• ' + rec).join('\n')
+    : '• ' + ((r.actions && r.actions[0]) || 'Use standard precautions');
+
+  const riskLevel = r.riskLevel || 'unknown';
+  const riskEmoji = { low: '🟢', medium: '🟡', high: '🟠', critical: '🔴' }[riskLevel] || '';
+
+  const report = [
+    '╔══════════════════════════════════════╗',
+    '║       SENTINELS SAFETY REPORT        ║',
+    '╚══════════════════════════════════════╝',
+    '',
+    'URL:       ' + (r.url || 'N/A'),
+    'Scanned:   ' + dateStr,
+    '',
+    '─── VERDICT ───',
+    r.verdict + ' (' + r.score + '/100)  ' + riskEmoji + ' ' + riskLevel.toUpperCase(),
+    '',
+    '─── SUMMARY ───',
+    r.summary || 'No summary available.',
+    '',
+    '─── RED FLAGS ───',
+    flagSection,
+    '',
+    '─── DOMAIN INFO ───',
+    '• SSL:       ' + (r.hasSSL ? 'Secure (HTTPS)' : 'No SSL'),
+    '• Age:       ' + (r.domainAge != null ? formatDomainAgeFallback(r.domainAge) : 'Unknown'),
+    '• Registrar: ' + (r.registrar || 'Unknown'),
+    '• Phishing:  ' + (r.isPhishing ? '⚠ FLAGGED' : 'Not found'),
+    '',
+    '─── RECOMMENDATIONS ───',
+    recSection,
+    '',
+    '────────────────────────────────────────',
+    'Generated by Sentinels v1.0',
+    'Report any false results via the extension.'
+  ].join('\n');
+
+  body.textContent = report;
+  modal.style.display = 'flex';
+}
+
+function closeReport() {
+  const modal = document.getElementById('reportModal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function copyReport() {
+  const body = document.getElementById('reportBody');
+  if (!body) return;
+  try {
+    await navigator.clipboard.writeText(body.textContent);
+    const btn = document.getElementById('reportCopyBtn');
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  } catch (err) {
+    console.error('[Popup] Copy failed:', err);
+  }
 }

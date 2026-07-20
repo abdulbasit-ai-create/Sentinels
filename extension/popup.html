@@ -788,6 +788,25 @@
   .flex-1 { flex: 1; }
   .gap-4 { gap: 4px; }
   .gap-8 { gap: 8px; }
+
+  /* ponytail: Quick Answers, Safety Checklist, Report Modal */
+  .qa-buttons { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+  .qa-btn { padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 500; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-secondary); cursor: pointer; transition: all var(--transition); white-space: nowrap; }
+  .qa-btn:hover { border-color: var(--accent-light); background: var(--accent-subtle); color: var(--accent); }
+  .qa-answer { padding: 10px 12px; border-radius: 10px; font-size: 12px; line-height: 1.6; background: var(--accent-subtle); border: 1px solid var(--accent-light); color: var(--text-secondary); margin-bottom: 10px; display: none; }
+  .checklist-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; font-size: 12px; color: var(--text-secondary); cursor: pointer; user-select: none; }
+  .checklist-item:hover { color: var(--text-primary); }
+  .checklist-cb { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; border: 2px solid var(--border); border-radius: 4px; display: grid; place-items: center; transition: all var(--transition); cursor: pointer; }
+  .checklist-cb.checked { background: var(--safe); border-color: var(--safe); }
+  .checklist-cb.checked::after { content: '\2713'; color: #fff; font-size: 10px; font-weight: 700; }
+  .checklist-item.done .checklist-label { text-decoration: line-through; color: var(--text-muted); }
+  .modal-overlay { position: absolute; inset: 0; z-index: 100; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .modal-content { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 14px; width: 100%; max-height: 80%; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 13px; }
+  .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); padding: 0 4px; line-height: 1; }
+  .modal-body { flex: 1; overflow-y: auto; padding: 16px; font-size: 12px; line-height: 1.6; white-space: pre-wrap; font-family: 'SF Mono', ui-monospace, Menlo, Consolas, monospace; color: var(--text-secondary); }
+  .modal-footer { display: flex; gap: 6px; padding: 10px 16px; border-top: 1px solid var(--border); justify-content: flex-end; }
+  .report-recommendation { padding: 6px 8px; margin-bottom: 4px; border-radius: 6px; background: var(--bg-secondary); border: 1px solid var(--border); font-size: 11px; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -917,6 +936,22 @@
           <div class="action-list" id="actionList"></div>
         </div>
 
+        <!-- Quick Answers -->
+        <div id="quickAnswersSection" class="mt-8" style="display:none;">
+          <div class="section-header">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Ask About This Site
+          </div>
+          <div class="qa-buttons" id="qaButtons">
+            <button class="qa-btn" data-q="0">🔍 Why is this suspicious?</button>
+            <button class="qa-btn" data-q="1">🔑 Can I enter my password?</button>
+            <button class="qa-btn" data-q="2">💳 Can I enter my credit card?</button>
+            <button class="qa-btn" data-q="3">👪 What should I tell my family?</button>
+            <button class="qa-btn" data-q="4">🛡️ How do I stay safe here?</button>
+          </div>
+          <div class="qa-answer" id="qaAnswer" style="display:none;"></div>
+        </div>
+
         <!-- Red Flag Cards (replaces flat Detected Issues) -->
         <div class="collapsible open" id="redflagsCollapse">
           <div class="collapsible-header">
@@ -955,6 +990,18 @@
           <div class="collapsible-body" id="recommendationsBody"></div>
         </div>
 
+        <!-- Safety Checklist -->
+        <div class="collapsible" id="checklistCollapse">
+          <div class="collapsible-header">
+            <span class="left">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Safety Checklist
+            </span>
+            <span><span class="count-badge" id="checklistProgress">0/0</span> <span class="chevron">▼</span></span>
+          </div>
+          <div class="collapsible-body" id="checklistBody"></div>
+        </div>
+
         <!-- Domain Intelligence -->
         <div class="collapsible" id="domainCollapse">
           <div class="collapsible-header">
@@ -982,6 +1029,7 @@
         <div class="actions">
           <button class="btn btn-primary" id="highlightBtn">Highlight Issues</button>
           <button class="btn btn-secondary" id="rescanBtn">Rescan</button>
+          <button class="btn btn-outline" id="reportBtn">📄 Report</button>
         </div>
 
         <!-- Feedback Buttons -->
@@ -1118,5 +1166,19 @@
 </div>
 
 <script src="popup.js"></script>
+<!-- Report Modal -->
+<div class="modal-overlay" id="reportModal" style="display:none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span>Sentinels Safety Report</span>
+      <button class="modal-close" id="reportClose">&times;</button>
+    </div>
+    <div class="modal-body" id="reportBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="reportCopyBtn">Copy Report</button>
+      <button class="btn btn-secondary" id="reportCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
