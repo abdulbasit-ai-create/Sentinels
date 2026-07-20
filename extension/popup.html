@@ -413,6 +413,191 @@
   .review-bar-label { color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px; }
   .review-bar-value { color: var(--text-primary); font-weight: 600; font-size: 12px; }
 
+  /* ========== Explanation Text ========== */
+  .explanation-box {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    transition: all var(--transition);
+  }
+  .explanation-box strong { color: var(--text-primary); }
+
+  /* ========== Real World Example ========== */
+  .real-world-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--accent-subtle);
+    border: 1px solid var(--accent-light);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    transition: all var(--transition);
+  }
+  .real-world-card .rwe-icon {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+  }
+  .real-world-card .rwe-text {
+    flex: 1;
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+  }
+  .real-world-card .rwe-text .rwe-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+    margin-bottom: 2px;
+  }
+
+  /* ========== Risk Level Badge ========== */
+  .risk-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .risk-badge.low { color: var(--safe); background: var(--safe-bg); border: 1px solid var(--safe-border); }
+  .risk-badge.medium { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-border); }
+  .risk-badge.high { color: var(--danger); background: var(--danger-bg); border: 1px solid var(--danger-border); }
+  .risk-badge.critical { color: #fff; background: var(--danger); border: 1px solid var(--danger); }
+
+  /* ========== Action Items ========== */
+  .action-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .action-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--text-primary);
+    font-weight: 500;
+    transition: all var(--transition);
+  }
+  .action-item .action-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+  }
+  .action-item.safe .action-icon { background: var(--safe-bg); color: var(--safe); }
+  .action-item.warn .action-icon { background: var(--warn-bg); color: var(--warn); }
+  .action-item.danger .action-icon { background: var(--danger-bg); color: var(--danger); }
+  .action-item.safe { border-color: var(--safe-border); }
+  .action-item.warn { border-color: var(--warn-border); }
+  .action-item.danger { border-color: var(--danger-border); }
+
+  /* ========== Red Flag Cards ========== */
+  .redflag-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 4px; }
+  .redflag-card {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    transition: all var(--transition);
+  }
+  .redflag-card:hover { border-color: var(--border-hover); }
+  .redflag-side {
+    width: 4px;
+    flex-shrink: 0;
+  }
+  .redflag-side.critical { background: var(--danger); }
+  .redflag-side.high { background: #f97316; }
+  .redflag-side.medium { background: var(--warn); }
+  .redflag-side.low { background: var(--safe); }
+
+  .redflag-body {
+    flex: 1;
+    padding: 8px 10px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .redflag-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    font-size: 13px;
+  }
+  .redflag-icon.critical { background: var(--danger-bg); }
+  .redflag-icon.high { background: rgba(249, 115, 22, 0.12); }
+  .redflag-icon.medium { background: var(--warn-bg); }
+  .redflag-icon.low { background: var(--safe-bg); }
+
+  .redflag-content { flex: 1; min-width: 0; }
+  .redflag-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+  .redflag-explanation {
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+  }
+  .redflag-severity-tag {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-top: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .redflag-severity-tag.critical { background: var(--danger-bg); color: var(--danger); }
+  .redflag-severity-tag.high { background: rgba(249, 115, 22, 0.12); color: #f97316; }
+  .redflag-severity-tag.medium { background: var(--warn-bg); color: var(--warn); }
+  .redflag-severity-tag.low { background: var(--safe-bg); color: var(--safe); }
+
+  .redflag-empty {
+    text-align: center;
+    padding: 12px;
+    color: var(--safe);
+    font-size: 12px;
+    background: var(--safe-bg);
+    border-radius: 10px;
+    border: 1px solid var(--safe-border);
+  }
+
   /* Action Buttons */
   .actions { display: flex; gap: 6px; padding-bottom: 6px; flex-wrap: wrap; }
   .actions .btn {
@@ -688,8 +873,61 @@
             </div>
           </div>
           <div class="score-info">
-            <div class="verdict-badge" id="verdictBadge">--<span class="confidence-badge" id="confidenceLevel"></span></div>
+            <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px;">
+              <span class="verdict-badge" id="verdictBadge">--<span class="confidence-badge" id="confidenceLevel"></span></span>
+              <span class="risk-badge" id="riskLevelBadge" style="display:none;"></span>
+            </div>
             <div class="verdict-summary" id="verdictSummary">Scanning...</div>
+          </div>
+        </div>
+
+        <!-- Explanation (plain English why) -->
+        <div class="explanation-box" id="explanationBox" style="display:none;">
+          <strong>Why we reached this conclusion:</strong>
+          <div id="explanationText"></div>
+        </div>
+
+        <!-- Real Life Example -->
+        <div class="real-world-card" id="realWorldCard" style="display:none;">
+          <div class="rwe-icon">💡</div>
+          <div class="rwe-text">
+            <div class="rwe-label">Real Life Comparison</div>
+            <div id="realWorldText"></div>
+          </div>
+        </div>
+
+        <!-- ELI5 (Explain Like I'm 10) -->
+        <div class="collapsible" id="eli5Collapse">
+          <div class="collapsible-header">
+            <span class="left">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Explain Like I'm 10
+            </span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="collapsible-body" id="eli5Body" style="font-size:13px;line-height:1.6;color:var(--text-primary);padding:10px 12px 12px;"></div>
+        </div>
+
+        <!-- What Should I Do (actions) -->
+        <div id="actionsSection" style="display:none;">
+          <div class="section-header">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            What Should I Do?
+          </div>
+          <div class="action-list" id="actionList"></div>
+        </div>
+
+        <!-- Red Flag Cards (replaces flat Detected Issues) -->
+        <div class="collapsible open" id="redflagsCollapse">
+          <div class="collapsible-header">
+            <span class="left">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Detected Red Flags
+            </span>
+            <span><span class="count-badge danger" id="redflagsCount">0</span> <span class="chevron">▼</span></span>
+          </div>
+          <div class="collapsible-body" id="redflagsList">
+            <div class="redflag-empty">No red flags detected on this page</div>
           </div>
         </div>
 
@@ -703,32 +941,6 @@
             <span class="chevron">▼</span>
           </div>
           <div class="collapsible-body" id="threatBreakdownBody"></div>
-        </div>
-
-        <!-- ELI5 (Explain Like I'm 5) -->
-        <div class="collapsible" id="eli5Collapse">
-          <div class="collapsible-header">
-            <span class="left">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              Explain Like I'm 5
-            </span>
-            <span class="chevron">▼</span>
-          </div>
-          <div class="collapsible-body" id="eli5Body" style="font-size:13px;line-height:1.6;color:var(--text-primary);padding:10px 12px 12px;"></div>
-        </div>
-
-        <!-- Detected Issues (collapsible) -->
-        <div class="collapsible open" id="issuesCollapse">
-          <div class="collapsible-header">
-            <span class="left">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              Detected Issues
-            </span>
-            <span><span class="count-badge danger" id="issuesCount">0</span> <span class="chevron">▼</span></span>
-          </div>
-          <div class="collapsible-body" id="flagsList">
-            <div class="no-flags">No issues detected on this page</div>
-          </div>
         </div>
 
         <!-- Recommendations (collapsible) -->
