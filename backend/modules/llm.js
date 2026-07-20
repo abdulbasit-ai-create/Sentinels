@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 //  Sentinels — backend/modules/llm.js
 //  AI analysis using Groq — dynamically managed models
 //  With caching, rate limiting, fallback, injection protection
@@ -210,6 +210,17 @@ function parseLLMResponse(raw, modelId) {
     flags: Array.isArray(parsed.flags) ? parsed.flags.slice(0, 12) : [],
     summary: typeof parsed.summary === 'string' ? parsed.summary.slice(0, 300) : 'Analysis complete.',
     eli5: typeof parsed.eli5 === 'string' ? parsed.eli5.slice(0, 500) : generateEli5Fallback(score, verdict, parsed.flags || []),
+    // New structured fields
+    explanation: typeof parsed.explanation === 'string' ? parsed.explanation.slice(0, 500) : null,
+    realWorldExample: typeof parsed.realWorldExample === 'string' ? parsed.realWorldExample.slice(0, 300) : null,
+    riskLevel: ['low', 'medium', 'high', 'critical'].includes(parsed.riskLevel) ? parsed.riskLevel : calculateRiskLevel(score),
+    actions: Array.isArray(parsed.actions) ? parsed.actions.slice(0, 4) : [],
+    redFlags: Array.isArray(parsed.redFlags) ? parsed.redFlags.slice(0, 8).map(r => ({
+      icon: typeof r.icon === 'string' ? r.icon.slice(0, 4) : '⚠️',
+      title: typeof r.title === 'string' ? r.title.slice(0, 60) : 'Suspicious signal',
+      explanation: typeof r.explanation === 'string' ? r.explanation.slice(0, 200) : '',
+      severity: ['low', 'medium', 'high', 'critical'].includes(r.severity) ? r.severity : 'medium'
+    })) : [],
     details: {
       aiAnalysis: parsed.analysis || null,
       riskFactors: Array.isArray(parsed.riskFactors) ? parsed.riskFactors.slice(0, 10) : [],
@@ -379,12 +390,19 @@ function fallbackAnalysis(data) {
   score = clamp(score, 0, 100);
   const verdict = calculateVerdict(score);
 
+  const riskLevel = calculateRiskLevel(score);
+
   return {
     score,
     verdict,
     flags: flags.slice(0, 10),
     summary: buildFallbackSummary(score, flags),
     eli5: generateEli5Fallback(score, verdict, flags),
+    explanation: generateFallbackExplanation(score, verdict, flags),
+    realWorldExample: generateFallbackRealWorldExample(verdict, score),
+    riskLevel,
+    actions: generateActions(verdict, riskLevel, flags),
+    redFlags: generateFallbackRedFlags(flags),
     details: {
       aiAnalysis: buildFallbackAnalysis(score, riskFactors, positiveSignals),
       riskFactors: riskFactors.slice(0, 10),
@@ -438,7 +456,13 @@ function buildSystemPrompt(data) {
     systemMsg += '\n\nIMPORTANT CONTEXT: The domain "' + rootDomain + '" is a well-known, established website. Unless the data shows it has been COMPROMISED (e.g., flagged in phishing/malware databases, injected content), your score should reflect this. Do NOT penalize trusted domains for standard features like login forms, cookie banners, analytics scripts, or marketing language. Score should be 85+ for trusted domains with no compromise indicators.';
   }
 
-  systemMsg += '\n\nIMPORTANT: Include an "eli5" field in your JSON response. This should explain the risk to a 10-year-old in simple, friendly analogies (like "a store with a broken lock" or "a street vendor who hides their ID"). Keep it 1-3 sentences, no jargon.';
+  systemMsg += '\n\nIMPORTANT: Include ALL of these fields in your JSON:\n';
+  systemMsg += '- "eli5": Explain like the user is 10 years old. Simple friendly analogies. 1-3 sentences, zero jargon.\n';
+  systemMsg += '- "explanation": A plain-English paragraph explaining WHY the verdict was reached. Mention specific signals found on this page.\n';
+  systemMsg += '- "realWorldExample": A relatable real-world analogy for the risk (e.g. "This is like someone wearing a fake police uniform to gain your trust"). 1 sentence.\n';
+  systemMsg += '- "riskLevel": One of: "low", "medium", "high", "critical"\n';
+  systemMsg += '- "actions": Array of 2-3 specific short actions the user should take. e.g. ["Safe to continue browsing", "Verify before entering passwords", "Close this website immediately"]\n';
+  systemMsg += '- "redFlags": Array of objects, one per detected issue, each with: { "icon": emoji or "⚠️"/"🔴"/"🟡"/"🟢", "title": "Short 3-5 word title", "explanation": "Plain English what this means and why it matters", "severity": "low|medium|high|critical" }\n';
 
   systemMsg += '\n\nReturn ONLY valid JSON, no markdown, no explanation outside the JSON.';
   return systemMsg;
@@ -471,8 +495,26 @@ function buildAdvancedPrompt(data) {
 'Registrar: ' + (data.registrar || 'Unknown') + '\n' +
 'Phishing DB: ' + (data.isPhishing ? 'YES \u2014 FLAGGED' : 'Not found') + '\n' +
 'Malware DB: ' + (data.isMalicious ? 'YES \u2014 FLAGGED' : 'Not found') + '\n\n' +
-'Return JSON with this exact structure:\n' +
-'{\n  "score": <integer 0-100>,\n  "verdict": "<SAFE|SUSPICIOUS|SCAM>",\n  "confidence": "<high|medium|low>",\n  "eli5": "<explain-like-im-5 in simple analogies, 1-3 sentences>",\n  "flags": ["<danger signal>", ...],\n  "riskFactors": ["<risk factor>", ...],\n  "positiveSignals": ["<positive signal>", ...],\n  "analysis": "<2-3 sentence explanation>",\n  "summary": "<One clear sentence verdict>",\n  "recommendations": ["<action>", ...]\n}\n\n' +
+'Return JSON with this EXACT structure (ALL fields required):\n' +
+'{\n  "score": <integer 0-100>,\n' +
+'  "verdict": "<SAFE|SUSPICIOUS|SCAM>",\n' +
+'  "confidence": "<high|medium|low>",\n' +
+'  "eli5": "<explain-like-im-10: 1-3 sentences with simple analogy, no jargon>",\n' +
+'  "explanation": "<plain English paragraph: why this verdict, what signals were found>",\n' +
+'  "realWorldExample": "<one relatable real-world analogy sentence>",\n' +
+'  "riskLevel": "<low|medium|high|critical>",\n' +
+'  "actions": ["<specific action 1>", "<specific action 2>", "<specific action 3>"],\n' +
+'  "redFlags": [\n' +
+'    { "icon": "🟡", "title": "<Short title>", "explanation": "<Plain English>", "severity": "<low|medium|high|critical>" },\n' +
+'    { "icon": "🔴", "title": "<Short title>", "explanation": "<Plain English>", "severity": "<low|medium|high|critical>" }\n' +
+'  ],\n' +
+'  "flags": ["<danger signal>", ...],\n' +
+'  "riskFactors": ["<risk factor>", ...],\n' +
+'  "positiveSignals": ["<positive signal>", ...],\n' +
+'  "analysis": "<2-3 sentence explanation>",\n' +
+'  "summary": "<One clear sentence verdict>",\n' +
+'  "recommendations": ["<action>", ...]\n' +
+'}\n\n' +
 'SCORING RULES:\n' +
 '  90-100: Established, trusted site.\n' +
 '  75-89:  Legitimate site with minor concerns.\n' +
@@ -483,7 +525,8 @@ function buildAdvancedPrompt(data) {
 '  SAFE: score >= 70\n' +
 '  SUSPICIOUS: score 40-69\n' +
 '  SCAM: score < 40\n\n' +
-'The "eli5" field is REQUIRED. Explain the risk to a child using everyday analogies.\n';
+'REQUIRED: eli5, explanation, realWorldExample, riskLevel, actions, and redFlags[] are ALL mandatory fields.\n' +
+'redFlags should have ONE entry per distinct issue found. If the site is clean, redFlags can be an empty array.\n';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -521,6 +564,66 @@ function calculateVerdict(score) {
   if (score >= 70) return 'SAFE';
   if (score >= 40) return 'SUSPICIOUS';
   return 'SCAM';
+}
+
+function calculateRiskLevel(score) {
+  if (score >= 80) return 'low';
+  if (score >= 60) return 'medium';
+  if (score >= 30) return 'high';
+  return 'critical';
+}
+
+function generateActions(verdict, riskLevel, flags) {
+  if (verdict === 'SAFE' || riskLevel === 'low') {
+    return ['Safe to continue browsing', 'Always use common sense online'];
+  }
+  if (verdict === 'SCAM' || riskLevel === 'critical' || riskLevel === 'high') {
+    const actions = ['Close this website immediately', 'Do NOT enter any personal information'];
+    if (flags.some(f => /password|card|bank|ssn/i.test(f))) {
+      actions.push('Change passwords if you already entered them');
+    }
+    return actions;
+  }
+  return ['Verify this site before entering passwords', 'Check for official contact info', 'Look up independent reviews'];
+}
+
+function generateFallbackExplanation(score, verdict, flags) {
+  if (verdict === 'SAFE' || score >= 70) {
+    return 'We found no significant issues with this website. It has proper security measures like HTTPS, and the domain appears legitimate. Our analysis shows it is safe to use.';
+  }
+  if (verdict === 'SCAM' || score < 40) {
+    let sigs = '';
+    if (flags.length > 0) sigs = ' Specific signals: ' + flags.slice(0, 3).join(', ') + '.';
+    return 'This website shows multiple strong indicators of being malicious or fraudulent.' + sigs + ' These signals together give us high confidence this site is not trustworthy.';
+  }
+  let sigs = '';
+  if (flags.length > 0) sigs = ' Signals include: ' + flags.slice(0, 2).join(', ') + '.';
+  return 'This site has some suspicious characteristics we cannot ignore.' + sigs + ' While not definitively malicious, caution is strongly advised.';
+}
+
+function generateFallbackRealWorldExample(verdict, score) {
+  if (verdict === 'SAFE' || score >= 70) {
+    return 'This is like a store in a busy shopping center — it has proper licenses, security cameras, and other customers have shopped here without issues.';
+  }
+  if (verdict === 'SCAM' || score < 40) {
+    return 'This is like someone wearing a fake police uniform and asking for your wallet — it looks official at first glance, but nothing checks out up close.';
+  }
+  return 'This is like a food stall with a proper menu board but no health inspection certificate — it might be fine, but you cannot be sure.';
+}
+
+function generateFallbackRedFlags(flags) {
+  if (!flags || flags.length === 0) return [];
+  return flags.slice(0, 8).map(f => {
+    let icon = '⚠️', severity = 'medium';
+    const lower = f.toLowerCase();
+    if (/scam|phish|fraud|malicious|malware|danger/i.test(lower)) { icon = '🔴'; severity = 'critical'; }
+    else if (/password|credential|bank|card|ssn|urgent|suspended/i.test(lower)) { icon = '🔴'; severity = 'high'; }
+    else if (/fake|spoof|impersonat|deceptive|misleading/i.test(lower)) { icon = '⚠️'; severity = 'high'; }
+    else if (/new domain|no ssl|suspicious/i.test(lower)) { icon = '🟡'; severity = 'medium'; }
+    else { icon = '🟡'; severity = 'medium'; }
+    const title = f.length > 50 ? f.slice(0, 47) + '...' : f;
+    return { icon, title, explanation: f, severity };
+  });
 }
 
 function clamp(val, min, max) {
