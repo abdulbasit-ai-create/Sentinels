@@ -789,25 +789,38 @@ function renderResult(result) {
 
   document.getElementById('verdictSummary').textContent = summary || 'Analysis complete.';
 
-  // ── Issues Count ──
-  const issuesCount = document.getElementById('issuesCount');
-  if (issuesCount) {
-    const count = (flags || []).length;
-    issuesCount.textContent = count;
-    issuesCount.className = `count-badge ${count === 0 ? 'safe' : count <= 3 ? 'warn' : 'danger'}`;
+  // ── Risk Level Badge ──
+  renderRiskLevel(result);
+
+  // ── Explanation (why we reached this conclusion) ──
+  renderExplanation(result);
+
+  // ── Real World Example ──
+  renderRealWorldExample(result);
+
+  // ── Render ELI5 ──
+  renderEli5(result);
+
+  // ── Actions (What should I do) ──
+  renderActions(result);
+
+  // ── Red Flags Count ──
+  const redflagsCount = document.getElementById('redflagsCount');
+  const redflags = result.redFlags || [];
+  if (redflagsCount) {
+    const count = redflags.length;
+    redflagsCount.textContent = count;
+    redflagsCount.className = `count-badge ${count === 0 ? 'safe' : count <= 3 ? 'warn' : 'danger'}`;
   }
 
-  // ── Render Flags ──
-  renderFlags(flags || []);
+  // ── Render Red Flag Cards ──
+  renderRedFlags(result);
 
   // ── Render Threat Breakdown ──
   renderThreatBreakdown(result);
 
   // ── Render Recommendations ──
   renderRecommendations(result);
-
-  // ── Render ELI5 ──
-  renderEli5(result);
 
   // ── Domain Intelligence ──
   const sslEl = document.getElementById('sslStatus');
@@ -854,10 +867,10 @@ function renderResult(result) {
 
   document.getElementById('reviewCount').textContent = reviewCount != null ? `${reviewCount} found` : '--';
 
-  // Ensure issues collapsible is open if there are issues
-  const issuesCollapse = document.getElementById('issuesCollapse');
-  if (issuesCollapse && flags && flags.length > 0) {
-    issuesCollapse.classList.add('open');
+  // Ensure redflags collapsible is open if there are red flags
+  const redflagsCollapse = document.getElementById('redflagsCollapse');
+  if (redflagsCollapse && redflags.length > 0) {
+    redflagsCollapse.classList.add('open');
   }
 
   lastResult = result;
@@ -1080,6 +1093,174 @@ function generateEli5Fallback(score, verdict, flags) {
   return 'This website gives mixed signals \u2014 like a store with a proper sign but a broken lock on the door.' + reasons + ' We recommend being careful: don\'t enter passwords or payment details until you\'re sure it\'s legit.';
 }
 
+// ── Risk Level ──
+function renderRiskLevel(result) {
+  const badge = document.getElementById('riskLevelBadge');
+  if (!badge) return;
+  const riskLevel = result.riskLevel || calculateRiskLevel(result.score);
+  if (!riskLevel) { badge.style.display = 'none'; return; }
+  badge.style.display = 'inline-flex';
+  badge.className = 'risk-badge ' + riskLevel;
+  const icons = { low: '🟢', medium: '🟡', high: '🟠', critical: '🔴' };
+  badge.textContent = (icons[riskLevel] || '') + ' ' + riskLevel.toUpperCase();
+}
+
+function calculateRiskLevel(score) {
+  if (score >= 80) return 'low';
+  if (score >= 60) return 'medium';
+  if (score >= 30) return 'high';
+  return 'critical';
+}
+
+// ── Explanation (why we reached this conclusion) ──
+function renderExplanation(result) {
+  const box = document.getElementById('explanationBox');
+  const textEl = document.getElementById('explanationText');
+  if (!box || !textEl) return;
+
+  const explanation = result.explanation || generateFallbackExplanation(result);
+  if (explanation) {
+    box.style.display = 'block';
+    textEl.textContent = explanation;
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+function generateFallbackExplanation(result) {
+  const { score, verdict, flags } = result;
+  if (verdict === 'SAFE' || score >= 70) {
+    return 'We found no significant issues with this website. It has proper security measures and appears legitimate based on our analysis.';
+  }
+  if (verdict === 'SCAM' || score < 40) {
+    let sigs = '';
+    if (flags && flags.length > 0) sigs = ' Specific signals: ' + flags.slice(0, 3).join(', ') + '.';
+    return 'This website shows multiple strong indicators of being malicious or fraudulent.' + sigs + ' These signals together give us high confidence this site is not trustworthy.';
+  }
+  let sigs = '';
+  if (flags && flags.length > 0) sigs = ' Signals include: ' + flags.slice(0, 2).join(', ') + '.';
+  return 'This site has some suspicious characteristics we cannot ignore.' + sigs + ' While not definitively malicious, caution is strongly advised.';
+}
+
+// ── Real World Example ──
+function renderRealWorldExample(result) {
+  const card = document.getElementById('realWorldCard');
+  const textEl = document.getElementById('realWorldText');
+  if (!card || !textEl) return;
+
+  const example = result.realWorldExample || generateFallbackExample(result);
+  if (example) {
+    card.style.display = 'flex';
+    textEl.textContent = example;
+  } else {
+    card.style.display = 'none';
+  }
+}
+
+function generateFallbackExample(result) {
+  const { verdict, score } = result;
+  if (verdict === 'SAFE' || score >= 70) {
+    return 'This is like a store in a busy shopping center — it has proper licenses, security cameras, and other customers have shopped here without issues.';
+  }
+  if (verdict === 'SCAM' || score < 40) {
+    return 'This is like someone wearing a fake police uniform and asking for your wallet — it looks official at first glance, but nothing checks out up close.';
+  }
+  return 'This is like a food stall with a proper menu board but no health inspection certificate — it might be fine, but you cannot be sure.';
+}
+
+// ── Actions (What should I do) ──
+function renderActions(result) {
+  const section = document.getElementById('actionsSection');
+  const list = document.getElementById('actionList');
+  if (!section || !list) return;
+
+  const actions = result.actions || generateFallbackActions(result);
+  if (!actions || actions.length === 0) { section.style.display = 'none'; return; }
+
+  section.style.display = 'block';
+  list.innerHTML = '';
+
+  const theme = result.verdict === 'SAFE' ? 'safe' : result.verdict === 'SUSPICIOUS' ? 'warn' : 'danger';
+  const icons = { safe: '✓', warn: '!', danger: '✕' };
+
+  actions.forEach(action => {
+    const item = document.createElement('div');
+    item.className = 'action-item ' + theme;
+    item.innerHTML = '<span class="action-icon">' + (icons[theme] || '•') + '</span><span>' + action + '</span>';
+    list.appendChild(item);
+  });
+}
+
+function generateFallbackActions(result) {
+  const { verdict, score, flags } = result;
+  if (verdict === 'SAFE' || score >= 70) {
+    return ['Safe to continue browsing', 'Always use common sense online'];
+  }
+  if (verdict === 'SCAM' || score < 40) {
+    const actions = ['Close this website immediately', 'Do NOT enter any personal information'];
+    if (flags && flags.some(f => /password|card|bank|ssn/i.test(f))) {
+      actions.push('Change passwords if you already entered them');
+    }
+    return actions;
+  }
+  return ['Verify this site before entering passwords', 'Check for official contact info', 'Look up independent reviews'];
+}
+
+// ── Red Flag Cards ──
+function renderRedFlags(result) {
+  const container = document.getElementById('redflagsList');
+  if (!container) return;
+
+  const redFlags = result.redFlags || generateFallbackRedFlags(result);
+  if (!redFlags || redFlags.length === 0) {
+    container.innerHTML = '<div class="redflag-empty">No red flags detected on this page</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  redFlags.forEach((flag, i) => {
+    const card = document.createElement('div');
+    card.className = 'redflag-card fade-in';
+    card.style.animationDelay = (i * 0.04) + 's';
+
+    const severity = flag.severity || 'medium';
+    const icons = { critical: '🔴', high: '⚠️', medium: '🟡', low: '🟢' };
+
+    card.innerHTML =
+      '<div class="redflag-side ' + severity + '"></div>' +
+      '<div class="redflag-body">' +
+        '<div class="redflag-icon ' + severity + '">' + (flag.icon || icons[severity] || '⚠️') + '</div>' +
+        '<div class="redflag-content">' +
+          '<div class="redflag-title">' + escapeHtml(flag.title || 'Suspicious Signal') + '</div>' +
+          '<div class="redflag-explanation">' + escapeHtml(flag.explanation || '') + '</div>' +
+          '<span class="redflag-severity-tag ' + severity + '">' + severity.toUpperCase() + '</span>' +
+        '</div>' +
+      '</div>';
+
+    container.appendChild(card);
+  });
+}
+
+function generateFallbackRedFlags(result) {
+  const flags = result.flags || [];
+  if (!flags || flags.length === 0) return [];
+  return flags.slice(0, 8).map(f => {
+    let icon = '🟡', severity = 'medium';
+    const lower = f.toLowerCase();
+    if (/scam|phish|fraud|malicious|malware|danger/i.test(lower)) { icon = '🔴'; severity = 'critical'; }
+    else if (/password|credential|bank|card|ssn|urgent|suspended/i.test(lower)) { icon = '🔴'; severity = 'high'; }
+    else if (/fake|spoof|impersonat|deceptive|misleading/i.test(lower)) { icon = '⚠️'; severity = 'high'; }
+    else if (/new domain|no ssl|suspicious/i.test(lower)) { icon = '🟡'; severity = 'medium'; }
+    return { icon, title: f.length > 50 ? f.slice(0, 47) + '...' : f, explanation: f, severity };
+  });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 // ========== Highlights ==========
 
 function toggleHighlights() {
@@ -1126,6 +1307,10 @@ function hideAll() {
   const welcome = document.getElementById('welcomeState');
   if (welcome) welcome.style.display = 'none';
   document.getElementById('scanBtn').disabled = false;
+  // Hide dynamic sections for clean transition
+  document.getElementById('explanationBox') && (document.getElementById('explanationBox').style.display = 'none');
+  document.getElementById('realWorldCard') && (document.getElementById('realWorldCard').style.display = 'none');
+  document.getElementById('actionsSection') && (document.getElementById('actionsSection').style.display = 'none');
 }
 
 function updateFooter(text, color) {
