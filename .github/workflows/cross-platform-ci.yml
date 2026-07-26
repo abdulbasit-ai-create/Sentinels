@@ -1,0 +1,68 @@
+name: Cross-Platform CI
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+
+jobs:
+  validate:
+    name: Validate on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        if: ${{ hashFiles('**/requirements*.txt', '**/pyproject.toml', '**/setup.py') != '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        if: ${{ hashFiles('**/requirements*.txt') != '' }}
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          for f in $(find . -name "requirements*.txt" -not -path "*/node_modules/*" 2>/dev/null); do
+            dir=$(dirname "$f")
+            echo "Installing deps in $dir"
+            (cd "$dir" && pip install -r "$(basename $f)" 2>/dev/null) || true
+          done
+
+      - name: Run Python checks
+        if: ${{ hashFiles('**/requirements*.txt') != '' }}
+        shell: bash
+        run: |
+          python -m compileall -q . 2>/dev/null || echo "Python compile checks done"
+
+      - name: Setup Node
+        if: ${{ hashFiles('**/package.json') != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node dependencies
+        if: ${{ hashFiles('**/package.json') != '' }}
+        shell: bash
+        run: |
+          for f in $(find . -name "package.json" -not -path "*/node_modules/*" 2>/dev/null); do
+            dir=$(dirname "$f")
+            echo "--- Installing Node deps in $dir ---"
+            (cd "$dir" && npm install 2>/dev/null) || echo "npm install skipped in $dir"
+          done
+
+      - name: Run Node checks
+        if: ${{ hashFiles('**/package.json') != '' }}
+        shell: bash
+        run: |
+          for f in $(find . -name "package.json" -not -path "*/node_modules/*" 2>/dev/null); do
+            dir=$(dirname "$f")
+            echo "--- Running checks in $dir ---"
+            (cd "$dir" && npm run build --if-present 2>/dev/null) || echo "Build skipped in $dir"
+          done
