@@ -5,13 +5,13 @@
 //  Uses model_manager for auto-discovery, fallback & tracking
 // ============================================================
 
-const OpenAI = require('openai');
 const crypto = require('crypto');
 const { isTrustedDomain, extractRootDomain } = require('./heuristics');
 const modelManager = require('./model_manager');
 
 const NVIDIA_BASE_URL = process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1';
-const openai = new OpenAI({ apiKey: process.env.NVIDIA_API_KEY, baseURL: NVIDIA_BASE_URL });
+const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY;
+const LLM_TIMEOUT = parseInt(process.env.LLM_TIMEOUT_MS || '30000', 10);
 
 // ═══════════════════════════════════════════════════════════════
 //  CACHE
@@ -97,13 +97,13 @@ async function analyzeWithAI(data, clientIp = 'unknown') {
   // 3. Sanitize user data for prompt injection protection
   const sanitizedData = sanitizeForPrompt(data);
 
-  // 4. Try Groq API with model fallback chain
+  // 4. Try NVIDIA NIM API with model fallback chain
   try {
     const result = await queryGroq(sanitizedData);
     setCachedResponse(cacheKey, result);
     return result;
   } catch (err) {
-    console.error('[LLM] All Groq models failed:', err.message);
+    console.error('[LLM] All NVIDIA NIM models failed:', err.message);
     // 5. Fallback to keyword-based analysis
     const fallback = fallbackAnalysis(sanitizedData);
     return fallback;
@@ -126,14 +126,24 @@ async function queryGroq(data) {
   let lastError;
   const modelsAttempted = [];
 
+  // Log request (sanitized — no API keys)
+  const safePrompt = prompt.replace(/NVIDIA_API_KEY[^}]+/gi, 'NVIDIA_API_KEY=***[REDACTED]***');
+  console.log(`[LLM] Request to ${NVIDIA_BASE_URL.replace(/\/+$/, '')}/chat/completions`);
+  console.log(`[LLM]   model: ${fallbackChain[0]}`);
+  console.log(`[LLM]   max_tokens: 1200, temperature: 0.1`);
+  console.log(`[LLM]   system_prompt: ${systemPrompt.substring(0, 100)}...`);
+  console.log(`[LLM]   user_prompt: ${safePrompt.substring(0, 200)}...`);
+  console.log(`[LLM]   timeout: ${LLM_TIMEOUT}ms, maxRetries: 1`);
+
   for (const modelId of fallbackChain) {
     modelsAttempted.push(modelId);
 
-    for (let attempt = 0; attempt <= 2; attempt++) {
+    for (let attempt = 0; attempt <= 1; attempt++) {
       const start = Date.now();
       try {
         console.log(`[LLM] Attempting model: ${modelId} (attempt ${attempt + 1})`);
-        const response = await openai.chat.completions.create({
+        
+        const body = JSON.stringify({
           model: modelId,
           max_tokens: 1200,
           temperature: 0.1,
@@ -142,9 +152,24 @@ async function queryGroq(data) {
             { role: 'user', content: prompt }
           ]
         });
+        
+        const res = await fetch(`${NVIDIA_BASE_URL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${NVIDIA_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body,
+          signal: AbortSignal.timeout(LLM_TIMEOUT)
+        });
 
+        if (!res.ok) {
+          throw new Error(`${res.status} ${res.statusText}`);
+        }
+
+        const json = await res.json();
         const latency = Date.now() - start;
-        const raw = response.choices[0]?.message?.content?.trim() || '{}';
+        const raw = json.choices?.[0]?.message?.content?.trim() || '{}';
         const parsed = parseLLMResponse(raw, modelId);
 
         if (parsed) {
@@ -161,9 +186,9 @@ async function queryGroq(data) {
         modelManager.getPerformanceTracker().recordFailure(modelId, err);
         console.warn(`[LLM] Model ${modelId} failed after ${latency}ms: ${err.message}`);
 
-        if (attempt < 2) {
+        if (attempt < 1) {
           const delay = Math.min(1000 * Math.pow(2, attempt), 4000);
-          console.warn(`[LLM] Retry ${attempt + 1}/2 for ${modelId} after ${delay}ms`);
+          console.warn(`[LLM] Retry ${attempt + 1}/1 for ${modelId} after ${delay}ms`);
           await new Promise(r => setTimeout(r, delay));
         }
       }
@@ -172,8 +197,9 @@ async function queryGroq(data) {
     if (!modelManager.fallbackEnabled) break;
   }
 
-  const error = lastError || new Error('All Groq models failed after exhausting retries');
+  const error = lastError || new Error('All NVIDIA NIM models failed after exhausting retries');
   error.modelsAttempted = modelsAttempted;
+  console.error(`[LLM] All ${modelsAttempted.length} models failed: [${modelsAttempted.join(' -> ')}]`);
   throw error;
 }
 

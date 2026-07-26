@@ -22,6 +22,24 @@ const https = require('https');
 // Add new models here or use the discovery endpoint.
 
 const MODEL_REGISTRY = {
+  'meta/llama-4-maverick-17b-128e-instruct': {
+    id: 'meta/llama-4-maverick-17b-128e-instruct',
+    name: 'Llama 4 Maverick',
+    tier: 'production',
+    speed: 950,
+    contextWindow: 131072,
+    capabilities: ['chat', 'json-mode', 'reasoning'],
+    quality: 9
+  },
+  'mistralai/mixtral-8x7b-instruct-v0.1': {
+    id: 'mistralai/mixtral-8x7b-instruct-v0.1',
+    name: 'Mixtral 8x7B',
+    tier: 'production',
+    speed: 850,
+    contextWindow: 32768,
+    capabilities: ['chat', 'reasoning'],
+    quality: 8
+  },
   'deepseek-ai/deepseek-v4-pro': {
     id: 'deepseek-ai/deepseek-v4-pro',
     name: 'DeepSeek V4 Pro',
@@ -74,6 +92,8 @@ const MODEL_REGISTRY = {
 
 const FALLBACK_CHAINS = {
   quality: [
+    'meta/llama-4-maverick-17b-128e-instruct',
+    'mistralai/mixtral-8x7b-instruct-v0.1',
     'deepseek-ai/deepseek-v4-pro',
     'nvidia/llama-3.1-nemotron-70b-instruct',
     'google/gemma-2-27b-it',
@@ -81,6 +101,8 @@ const FALLBACK_CHAINS = {
     'mistralai/mistral-7b-instruct-v0.3'
   ],
   speed: [
+    'meta/llama-4-maverick-17b-128e-instruct',
+    'mistralai/mixtral-8x7b-instruct-v0.1',
     'mistralai/mistral-7b-instruct-v0.3',
     'deepseek-ai/deepseek-v4-pro',
     'google/gemma-2-27b-it',
@@ -88,6 +110,8 @@ const FALLBACK_CHAINS = {
     'nvidia/llama-3.1-nemotron-70b-instruct'
   ],
   economy: [
+    'meta/llama-4-maverick-17b-128e-instruct',
+    'mistralai/mixtral-8x7b-instruct-v0.1',
     'mistralai/mistral-7b-instruct-v0.3',
     'thudm/glm-4-9b-chat',
     'google/gemma-2-27b-it',
