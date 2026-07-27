@@ -14,9 +14,16 @@ const { checkPhishTank }         = require('../modules/phishtank');
 const { checkSafeBrowsing }      = require('../modules/safebrowsing');
 const { checkUrlhaus, checkUrlhausHost } = require('../modules/urlhaus');
 const { computeHeuristicScore, isTrustedDomain, extractRootDomain } = require('../modules/heuristics');
+const { saveScan, getHistory, getStats } = require('../modules/history');
 
-router.post('/analyze', async (req, res) => {
+// ── Shared scan pipeline ─────────────────────────────────────
+// Both /scan/quick and /scan/deep route through here.
+// quick mode: heuristic + threat intel only (no LLM call, ~2× faster)
+// deep  mode: full pipeline including LLM analysis
+
+async function runScan(req, res, mode) {
   const startTime = Date.now();
+  const isQuick = mode === 'quick';
 
   try {
     const pageData = normalizePageData(req.body);
@@ -29,13 +36,30 @@ router.post('/analyze', async (req, res) => {
       return res.status(400).json({ error: 'Invalid URL' });
     }
 
-    console.log(`[Analyze] ${pageData.url}`);
+    const parsedUrl = new URL(pageData.url);
+    console.log(`[${isQuick ? 'Quick' : 'Deep'}] ${parsedUrl.href} | SSL: ${pageData.hasSSL}`);
 
-    // Extract hostname for URLhaus check
-    let hostname = '';
-    try {
-      hostname = new URL(pageData.url).hostname;
-    } catch {}
+    let hostname = parsedUrl.hostname;
+
+    // ── Internal/localhost short-circuit ─────────────────────────
+    // Save the external lookups + LLM calls for URLs that are local.
+    if (isInternalHost(hostname)) {
+      const result = {
+        score: 100, verdict: 'SAFE', mode: isQuick ? 'quick' : 'deep',
+        flags: [`Internal host (${hostname}) — skipped analysis`],
+        summary: 'This is a local/internal address. No scan needed.',
+        details: { aiProvider: 'none', heuristicScore: 100, heuristicConfidence: 'high', llmScore: 100, isTrustedDomain: false, signalCount: 0 },
+        domainAge: null, domainAgeText: 'Local', domainCreated: null,
+        registrar: null, registrantOrg: null,
+        isPhishing: false, isMalicious: false, isInUrlhaus: false,
+        urlhausUrlCount: 0, hasSSL: pageData.hasSSL,
+        reviewCount: 0, darkPatternsFound: 0,
+        analysisMs: 0, scanTimestamp: new Date().toISOString(), url: pageData.url
+      };
+      console.log(`[${isQuick ? 'Quick' : 'Deep'}] Internal host, skipped: ${hostname}`);
+      saveScan(result);
+      return res.json(result);
+    }
 
     // ── 1. Parallel external lookups ────────────────────────────
     const [domainInfo, phishResult, safeBrowsingResult, urlhausResult] = await Promise.allSettled([
@@ -87,17 +111,30 @@ router.post('/analyze', async (req, res) => {
       }
     };
 
-    // ── 3. Run heuristic scoring + LLM analysis in parallel ─────
-    const [heuristicResult, aiResult] = await Promise.all([
-      Promise.resolve(computeHeuristicScore(enrichedData)),
-      analyzeWithAI(enrichedData)
-    ]);
+    // ── 3. Heuristic scoring ────────────────────────────────────
+    const heuristicResult = computeHeuristicScore(enrichedData);
+
+    let aiResult;
+    if (isQuick) {
+      // Quick mode: no LLM, use heuristic score as LLM surrogate
+      aiResult = {
+        score: heuristicResult.score,
+        summary: heuristicResult.signals?.length
+          ? `Quick scan found ${heuristicResult.signals.length} signal(s). No AI analysis performed.`
+          : 'Quick scan — no AI analysis.',
+        details: { aiProvider: 'none', mode: 'quick' },
+        flags: []
+      };
+    } else {
+      // Deep mode: run LLM analysis
+      aiResult = await analyzeWithAI(enrichedData);
+    }
 
     // ── 4. Threat intelligence aggregation ──────────────────────
     const threatIntel = computeThreatIntel(heuristicResult, {
       ...enrichedData,
       llmScore: aiResult.score,
-      aiProvider: aiResult.details?.aiProvider || 'nvidia',
+      aiProvider: aiResult.details?.aiProvider || (isQuick ? 'none' : 'nvidia'),
       heuristicScore: heuristicResult.score,
       heuristicConfidence: heuristicResult.confidence,
       signalCount: heuristicResult.signals?.length || 0,
@@ -114,8 +151,12 @@ router.post('/analyze', async (req, res) => {
     // ── 5. Composite scoring ────────────────────────────────────
     const compositeResult = computeCompositeScore(heuristicResult, aiResult, enrichedData);
 
-    // ── 5. Merge flags ──────────────────────────────────────────
+    // ── 6. Build flags ──────────────────────────────────────────
     const flags = buildFlagList(aiResult, enrichedData, domain, isPhishing, isMalicious, pageData);
+
+    if (isQuick) {
+      flags.unshift('Quick scan — AI analysis skipped');
+    }
 
     // Add zero-day flags from threat intel
     if (threatIntel.zeroDayPatterns.length > 0) {
@@ -124,13 +165,14 @@ router.post('/analyze', async (req, res) => {
       }
     }
 
-    // ── 6. Build response ───────────────────────────────────────
+    // ── 7. Build response ───────────────────────────────────────
     const result = {
       threatIntel,
       score: compositeResult.score,
       verdict: compositeResult.verdict,
       flags: [...new Set(flags)],
       summary: aiResult.summary,
+      mode: isQuick ? 'quick' : 'deep',
       details: {
         ...(aiResult.details || {}),
         heuristicScore: heuristicResult.score,
@@ -157,12 +199,12 @@ router.post('/analyze', async (req, res) => {
       url: pageData.url
     };
 
-    console.log(`[Analyze] Done in ${result.analysisMs}ms — ${result.verdict} (${result.score}/100) [H:${heuristicResult.score} L:${aiResult.score} => C:${compositeResult.score}]`);
+    console.log(`[${isQuick ? 'Quick' : 'Deep'}] Done in ${result.analysisMs}ms — ${result.verdict} (${result.score}/100)`);
+    saveScan(result);
     res.json(result);
 
   } catch (err) {
-    console.error('[Analyze] Error:', err.message, err.stack);
-    // Don't leak internal error details to the client
+    console.error(`[${isQuick ? 'Quick' : 'Deep'}] Error:`, err.message, err.stack);
     res.status(500).json({
       error: 'Analysis failed',
       score: 50,
@@ -171,7 +213,13 @@ router.post('/analyze', async (req, res) => {
       summary: 'Scan encountered an error. Results may be incomplete.'
     });
   }
-});
+}
+
+router.post('/scan/quick', (req, res) => runScan(req, res, 'quick'));
+router.post('/scan/deep', (req, res) => runScan(req, res, 'deep'));
+
+// Keep /analyze as alias for /scan/deep (backward compat)
+router.post('/analyze', (req, res) => runScan(req, res, 'deep'));
 
 // ── Composite Scoring Engine ─────────────────────────────────
 // Merges heuristic (deterministic) and LLM (probabilistic) scores
@@ -240,8 +288,11 @@ function computeCompositeScore(heuristic, llm, data) {
     blended = Math.min(blended, 40);
   }
 
+  // ponytail: trusted domains that somehow reach here (shouldn't per early return
+  // above, but defense-in-depth) get a gentler cap. HTTP-only access to a known
+  // trusted domain is not the same as an unknown shady site.
   if (!data.hasSSL) {
-    blended = Math.min(blended, 45);
+    blended = Math.min(blended, isTrusted ? 55 : 45);
   }
 
   blended = clamp(blended, 0, 100);
@@ -268,7 +319,16 @@ function buildFlagList(aiResult, enrichedData, domain, isPhishing, isMalicious, 
   } else if (domain.ageInDays && domain.ageInDays < 30) {
     flags.push(`Domain only ${domain.ageInDays} days old — recently registered`);
   }
-  if (!pageData.hasSSL) flags.push('No SSL certificate — connection is not secure');
+  // ponytail: avoid flag duplication with LLM fallback's "No SSL certificate"
+  const alreadyHasSSLFlag = flags.some(f => /ssl|certificate/i.test(f));
+  if (!pageData.hasSSL && !alreadyHasSSLFlag) {
+    const proto = String(pageData.url || '').toLowerCase();
+    if (proto.startsWith('https://')) {
+      flags.push('SSL/TLS certificate could not be verified — HTTPS URL but certificate status unknown');
+    } else {
+      flags.push('No SSL certificate — connection is not secure');
+    }
+  }
 
   if (enrichedData.registrantOrg && ['privacy', 'private', 'redacted'].some(k => enrichedData.registrantOrg.toLowerCase().includes(k))) {
     // Only include as a minor note, not a strong warning
@@ -300,10 +360,37 @@ function buildFlagList(aiResult, enrichedData, domain, isPhishing, isMalicious, 
   return flags;
 }
 
+// ── Feedback endpoint (false positive/negative reports) ─────
+
+const feedbackStore = [];
+
+router.post('/feedback', (req, res) => {
+  const { type, url, score, verdict, expectedVerdict, notes } = req.body || {};
+  if (!type || !url) {
+    return res.status(400).json({ error: 'Missing type or url' });
+  }
+  const entry = { type, url, score, verdict, expectedVerdict, notes, timestamp: Date.now() };
+  feedbackStore.push(entry);
+  // ponytail: in-memory only, capped at 500. Add persistence if feedback volume matters.
+  if (feedbackStore.length > 500) feedbackStore.shift();
+  console.log(`[Feedback] ${type} — ${url} (scored ${score}/${verdict}, expected ${expectedVerdict})`);
+  res.json({ success: true });
+});
+
 // ── History endpoint ─────────────────────────────────────────
 
 router.get('/history', async (req, res) => {
-  res.json({ message: 'History endpoint - use extension storage for local history' });
+  const limit = parseInt(req.query.limit, 10) || 50;
+  res.json({ scans: getHistory(limit), total: getHistory().length });
+});
+
+router.get('/stats', async (req, res) => {
+  const h = getHistory();
+  res.json({ ...getStats(), totalScans: h.length });
+});
+
+router.get('/feedback', (req, res) => {
+  res.json({ count: feedbackStore.length, recent: feedbackStore.slice(-20).reverse() });
 });
 
 module.exports = router;
@@ -317,7 +404,7 @@ function normalizePageData(body) {
     url: safeString(data.url, 2048),
     domain: safeString(data.domain, 255),
     title: safeString(data.title, 200),
-    hasSSL: Boolean(data.hasSSL),
+    hasSSL: data.hasSSL !== undefined ? Boolean(data.hasSSL) : String(data.url || '').toLowerCase().startsWith('https://'),
     metaDescription: safeString(data.metaDescription, 300),
     pageStats: sanitizeStats(data.pageStats),
     socialLinks: sanitizeStringArray(data.socialLinks, 12, 300),
@@ -429,6 +516,20 @@ function isValidHttpUrl(url) {
   } catch {
     return false;
   }
+}
+
+function isInternalHost(hostname) {
+  // ponytail: catches localhost, IPv4 loopback, IPv6, and common private ranges.
+  // Does NOT cover the full RFC 1918 space (10.x, 172.16-31.x) — add if internal
+  // network scans become a realistic vector.
+  if (!hostname || typeof hostname !== 'string') return false;
+  const lower = hostname.toLowerCase();
+  return lower === 'localhost'
+    || lower === '127.0.0.1'
+    || lower === '::1'
+    || lower === '0.0.0.0'
+    || lower.endsWith('.local')
+    || lower.endsWith('.localhost');
 }
 
 function clamp(val, min, max) {

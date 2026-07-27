@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import ErrorBoundary from '@/components/ErrorBoundary'
 
 export const metadata: Metadata = {
   title: 'Is This Legit? — Real-Time Scam & Phishing Detector',
@@ -50,9 +51,11 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans antialiased overflow-x-hidden noise">
-        <div className="relative min-h-screen">
-          {children}
-        </div>
+        <ErrorBoundary>
+          <div className="relative min-h-screen">
+            {children}
+          </div>
+        </ErrorBoundary>
       </body>
     </html>
   )

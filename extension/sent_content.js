@@ -1,5 +1,5 @@
 
-console.log('[Sentinels] Content script loaded on:', window.location.href);
+// Content script loaded
 
 // ============================================================
 //  Core Scraper
@@ -1032,10 +1032,10 @@ function removePageOverlay() {
 // ============================================================
 
 try {
-  console.log('[Sentinels] Setting up message listener');
+  // Setting up message listener
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    console.log('[Sentinels] Message received:', msg.type);
+    // Message received
 
     if (msg.type === 'PING') {
       sendResponse({ alive: true });

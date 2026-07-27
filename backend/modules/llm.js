@@ -115,6 +115,11 @@ async function analyzeWithAI(data, clientIp = 'unknown') {
 // ═══════════════════════════════════════════════════════════════
 
 async function queryGroq(data) {
+  // Fast-fail: no API key means no point trying
+  if (!NVIDIA_API_KEY) {
+    throw new Error('NVIDIA_API_KEY not configured');
+  }
+
   const prompt = buildAdvancedPrompt(data);
   const systemPrompt = buildSystemPrompt(data);
 

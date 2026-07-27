@@ -51,20 +51,28 @@ app.use(cors({
     const isLocalhost = ALLOW_LOCALHOST && /^http:\/\/localhost:\d+$/.test(origin);
 
     if (EXTENSION_ID) {
-      // Strict mode: only allow the specific extension ID
       const allowedChrome = `chrome-extension://${EXTENSION_ID}`;
       const allowedMoz = `moz-extension://${EXTENSION_ID}`;
-      return cb(null, origin === allowedChrome || origin === allowedMoz || isLocalhost);
+      if (origin === allowedChrome || origin === allowedMoz || isLocalhost) {
+        return cb(null, origin);
+      }
+      return cb(new Error(`Origin not allowed: ${origin}`));
     }
 
-    // Permissive mode: accept any browser extension
+    // Permissive mode (EXTENSION_ID not set): accept any browser extension
     const isChromeExt = origin.startsWith('chrome-extension://');
     const isMozExt = origin.startsWith('moz-extension://');
-    return cb(null, isChromeExt || isMozExt || isLocalhost);
+    if (isChromeExt || isMozExt || isLocalhost) {
+      return cb(null, origin);
+    }
+    return cb(new Error(`Origin not allowed: ${origin}`));
   },
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'X-ITL-Key', 'Authorization']
 }));
+
+// Trust first proxy hop for correct client IP in rate limiter
+app.set('trust proxy', 1);
 
 app.use(express.json({ limit: '2mb' }));
 
@@ -107,11 +115,12 @@ function timingSafeEqual(a, b) {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
-// ── Rate Limiting (in-memory with periodic cleanup) ──────────
+// ── Rate Limiting (in-memory, tiered by auth status) ─────────
 const requestCounts = new Map();
 const RATE_WINDOW_MS = 60 * 1000; // 1 minute
-const RATE_MAX_REQUESTS = 20;
-const RATE_CLEANUP_INTERVAL = 5 * 60 * 1000; // Clean up every 5 minutes
+const RATE_MAX_ANON = process.env.RATE_LIMIT_ANON || 10;    // unauthenticated
+const RATE_MAX_AUTHED = process.env.RATE_LIMIT_AUTHED || 50; // with API key
+const RATE_CLEANUP_INTERVAL = 5 * 60 * 1000;
 
 // Periodic cleanup to prevent unbounded Map growth
 const rateLimitCleanup = setInterval(() => {
@@ -135,8 +144,9 @@ if (rateLimitCleanup.unref) {
 
 app.use((req, res, next) => {
   const ip = req.ip || req.connection?.remoteAddress || 'unknown';
-  const apiKeyTag = req.get('x-itl-key') ? 'authed' : 'anon';
-  const key = `${ip}:${apiKeyTag}`;
+  const isAuthed = !!(req.get('x-itl-key') || req.get('authorization'));
+  const limit = isAuthed ? RATE_MAX_AUTHED : RATE_MAX_ANON;
+  const key = `${ip}:${isAuthed ? 'authed' : 'anon'}`;
   const now = Date.now();
 
   if (!requestCounts.has(key)) {
@@ -151,8 +161,8 @@ app.use((req, res, next) => {
     return next();
   }
 
-  if (entry.count >= RATE_MAX_REQUESTS) {
-    return res.status(429).json({ error: 'Rate limit exceeded. Try again in a minute.' });
+  if (entry.count >= limit) {
+    return res.status(429).json({ error: `Rate limit exceeded (${isAuthed ? '50' : '10'}/min). Try again later.` });
   }
 
   entry.count++;

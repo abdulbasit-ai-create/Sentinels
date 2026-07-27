@@ -21,102 +21,49 @@ const https = require('https');
 // NVIDIA NIM models available via the OpenAI-compatible API.
 // Add new models here or use the discovery endpoint.
 
+// ponytail: verified working models as of 2026-07-27.
+// All models tested against NVIDIA NIM API — only confirmed-working models included.
+// If a model goes EOL (410 Gone), replace it here. The fallback chain skips failures.
 const MODEL_REGISTRY = {
-  'meta/llama-4-maverick-17b-128e-instruct': {
-    id: 'meta/llama-4-maverick-17b-128e-instruct',
-    name: 'Llama 4 Maverick',
-    tier: 'production',
-    speed: 950,
-    contextWindow: 131072,
-    capabilities: ['chat', 'json-mode', 'reasoning'],
-    quality: 9
-  },
-  'mistralai/mixtral-8x7b-instruct-v0.1': {
-    id: 'mistralai/mixtral-8x7b-instruct-v0.1',
-    name: 'Mixtral 8x7B',
-    tier: 'production',
-    speed: 850,
-    contextWindow: 32768,
-    capabilities: ['chat', 'reasoning'],
-    quality: 8
-  },
-  'deepseek-ai/deepseek-v4-pro': {
-    id: 'deepseek-ai/deepseek-v4-pro',
-    name: 'DeepSeek V4 Pro',
-    tier: 'production',
-    speed: 800,
-    contextWindow: 131072,
-    capabilities: ['chat', 'json-mode', 'reasoning'],
-    quality: 9
-  },
-  'thudm/glm-4-9b-chat': {
-    id: 'thudm/glm-4-9b-chat',
-    name: 'GLM-4 9B Chat',
-    tier: 'production',
-    speed: 600,
-    contextWindow: 131072,
-    capabilities: ['chat', 'json-mode'],
-    quality: 7
-  },
-  'nvidia/llama-3.1-nemotron-70b-instruct': {
-    id: 'nvidia/llama-3.1-nemotron-70b-instruct',
-    name: 'Nemotron 70B',
-    tier: 'production',
-    speed: 400,
-    contextWindow: 128000,
-    capabilities: ['chat', 'json-mode', 'reasoning', 'tool-use'],
-    quality: 8
-  },
-  'mistralai/mistral-7b-instruct-v0.3': {
-    id: 'mistralai/mistral-7b-instruct-v0.3',
-    name: 'Mistral 7B v0.3',
-    tier: 'production',
-    speed: 1000,
-    contextWindow: 32768,
-    capabilities: ['chat', 'json-mode'],
-    quality: 6
-  },
-  'google/gemma-2-27b-it': {
-    id: 'google/gemma-2-27b-it',
-    name: 'Gemma 2 27B',
+  'meta/llama-3.1-70b-instruct': {
+    id: 'meta/llama-3.1-70b-instruct',
+    name: 'Llama 3.1 70B',
     tier: 'production',
     speed: 500,
-    contextWindow: 8192,
-    capabilities: ['chat', 'json-mode'],
-    quality: 7
+    contextWindow: 131072,
+    capabilities: ['chat', 'json-mode', 'reasoning'],
+    quality: 9
+  },
+  'meta/llama-3.1-8b-instruct': {
+    id: 'meta/llama-3.1-8b-instruct',
+    name: 'Llama 3.1 8B',
+    tier: 'production',
+    speed: 1000,
+    contextWindow: 131072,
+    capabilities: ['chat', 'json-mode', 'reasoning'],
+    quality: 8
   }
 };
 
 // ── Fallback Chains ───────────────────────────────────────────
 // Ordered from best to worst — model_manager tries each in sequence
 
+// ponytail: verified fallback chains — all models confirmed working 2026-07-27.
+// quality chain tries 70B first for best results, falls back to 8B.
+// speed chain prefers 8B for lower latency.
+// Economy same as speed (both models are free-tier NVIDIA NIM).
 const FALLBACK_CHAINS = {
   quality: [
-    'meta/llama-4-maverick-17b-128e-instruct',
-    'mistralai/mixtral-8x7b-instruct-v0.1',
-    'deepseek-ai/deepseek-v4-pro',
-    'nvidia/llama-3.1-nemotron-70b-instruct',
-    'google/gemma-2-27b-it',
-    'thudm/glm-4-9b-chat',
-    'mistralai/mistral-7b-instruct-v0.3'
+    'meta/llama-3.1-70b-instruct',
+    'meta/llama-3.1-8b-instruct'
   ],
   speed: [
-    'meta/llama-4-maverick-17b-128e-instruct',
-    'mistralai/mixtral-8x7b-instruct-v0.1',
-    'mistralai/mistral-7b-instruct-v0.3',
-    'deepseek-ai/deepseek-v4-pro',
-    'google/gemma-2-27b-it',
-    'thudm/glm-4-9b-chat',
-    'nvidia/llama-3.1-nemotron-70b-instruct'
+    'meta/llama-3.1-8b-instruct',
+    'meta/llama-3.1-70b-instruct'
   ],
   economy: [
-    'meta/llama-4-maverick-17b-128e-instruct',
-    'mistralai/mixtral-8x7b-instruct-v0.1',
-    'mistralai/mistral-7b-instruct-v0.3',
-    'thudm/glm-4-9b-chat',
-    'google/gemma-2-27b-it',
-    'deepseek-ai/deepseek-v4-pro',
-    'nvidia/llama-3.1-nemotron-70b-instruct'
+    'meta/llama-3.1-8b-instruct',
+    'meta/llama-3.1-70b-instruct'
   ]
 };
 
@@ -244,7 +191,7 @@ class ModelManager {
         chain = FALLBACK_CHAINS.economy;
         break;
       case 'stable':
-        chain = FALLBACK_CHAINS.stable;
+        chain = FALLBACK_CHAINS.quality;
         break;
       case 'analysis':
       default:
@@ -262,7 +209,7 @@ class ModelManager {
     }
 
     // 5. Ultimate fallback
-    return 'deepseek-ai/deepseek-v4-pro';
+    return 'meta/llama-3.1-8b-instruct';
   }
 
   // ── Get fallback chain for a task ─────────────────────────────
@@ -281,7 +228,7 @@ class ModelManager {
         baseChain = [...FALLBACK_CHAINS.economy];
         break;
       case 'stable':
-        baseChain = [...FALLBACK_CHAINS.stable];
+        baseChain = [...FALLBACK_CHAINS.quality];
         break;
       default:
         baseChain = [...FALLBACK_CHAINS.quality];

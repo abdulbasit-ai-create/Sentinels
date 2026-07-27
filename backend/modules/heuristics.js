@@ -202,12 +202,15 @@ function computeHeuristicScore(data) {
   }
 
   // ─── 4. SSL/TLS ──────────────────────────────────────────────
-  signals.push({
-    name: 'ssl',
-    score: data.hasSSL ? 100 : 10,
-    weight: data.hasSSL ? 5 : 12,
-    detail: data.hasSSL ? 'HTTPS with SSL certificate' : 'No SSL certificate - connection insecure'
-  });
+  // ponytail: trusted domains get lighter SSL penalty — a known domain
+  // like github.com accessed via HTTP is still the real GitHub, just
+  // on the wrong protocol. Upgrade path: redirect check.
+  const sslScore = data.hasSSL ? 100 : (isTrusted ? 50 : 10);
+  const sslWeight = data.hasSSL ? 5 : (isTrusted ? 3 : 12);
+  const sslDetail = data.hasSSL
+    ? 'HTTPS with SSL certificate'
+    : (isTrusted ? 'Using HTTP instead of HTTPS' : 'No SSL certificate - connection insecure');
+  signals.push({ name: 'ssl', score: sslScore, weight: sslWeight, detail: sslDetail });
 
   // ─── 5. URL Analysis ─────────────────────────────────────────
   const urlScore = analyzeUrl(data.url, data.urlSignals);

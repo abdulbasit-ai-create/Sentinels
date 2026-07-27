@@ -445,6 +445,8 @@ function detectTyposquatting(hostname) {
   // 2. Homoglyph / look-alike detection
   for (const brand of BRAND_TARGETS) {
     const brandName = brand.name;
+    // Skip exact match — the real domain is not typosquatting itself
+    if (domainName === brandName) continue;
     // Check if after substituting look-alike characters we get a match
     const similarity = homoglyphSimilarity(domainName, brandName);
     if (similarity >= 0.85) {
@@ -539,15 +541,16 @@ function detectBrandImpersonation(hostname) {
     const brandName = brand.name;
     const brandDomains = brand.domains;
 
-    // Check if brand appears in subdomain but not root domain
-    // e.g. "paypal.evil.com" impersonates paypal
-    if (normalized.includes(brandName) && !brandDomains.some(bd => rootDomain.endsWith(bd) && !rootDomain.startsWith(brandName))) {
-      // Brand found in hostname but not as the legitimate root domain
+    // Check if brand appears in subdomain but root domain isn't the brand's legitimate domain
+    // e.g. "paypal.evil.com" → rootDomain "evil.com" doesn't match any paypal domain → flagged
+    // e.g. "github.com" → rootDomain "github.com" matches brand domain "github.com" → NOT flagged
+    const isLegitimate = brandDomains.some(bd => rootDomain === bd);
+    if (normalized.includes(brandName) && !isLegitimate) {
       return {
         isSuspicious: true,
         impersonatedBrand: brandName,
         method: 'subdomain_impersonation',
-        detail: `"${brandName}" appears in subdomain but root domain is not ${brandName}`,
+        detail: `"${brandName}" appears in hostname but root domain "${rootDomain}" is not a legitimate ${brandName} domain`,
       };
     }
 

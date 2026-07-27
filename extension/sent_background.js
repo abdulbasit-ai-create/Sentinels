@@ -319,7 +319,8 @@ async function loadConfig() {
   _severityThreshold = data[CONFIG_KEYS.severityThreshold] || 40;
   _autoScan = data[CONFIG_KEYS.autoScan] !== false;
   _showNotifications = data[CONFIG_KEYS.showNotifications] !== false;
-  console.log('[Sentinels] Background loaded, API_BASE:', _apiBase,
+  // ponytail: one-time startup log — keep for debugging but minimal
+  console.log('[Sentinels] Ready',
     'Key configured:', !!_apiKey,
     'Threshold:', _severityThreshold,
     'AutoScan:', _autoScan);
@@ -373,8 +374,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ success: false, error: 'Invalid tab ID' });
     return true;
   }
-
-  console.log('[Sentinels] Message received:', msg.type);
 
   // ── IndexedDB Operations ──
   if (msg.type === 'GET_REPORTS') {
@@ -562,6 +561,19 @@ async function deleteReport(reportId) {
   }
 }
 
+// ── Notification dedup ──────────────────────────────────────────
+// Tracks which domains we've recently notified about to avoid spam.
+const RECENTLY_NOTIFIED = new Map(); // domain -> timestamp
+const NOTIFICATION_COOLDOWN_MS = 5 * 60 * 1000; // 5 min
+
+// Periodic cleanup of stale notification entries
+setInterval(() => {
+  const cutoff = Date.now() - NOTIFICATION_COOLDOWN_MS;
+  for (const [domain, ts] of RECENTLY_NOTIFIED) {
+    if (ts < cutoff) RECENTLY_NOTIFIED.delete(domain);
+  }
+}, 60 * 1000);
+
 // ── Real-Time URL Checking (chrome.tabs.onUpdated) ──────────────
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (!_autoScan) return;
@@ -592,7 +604,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   }
 
   // Auto-analyze the page
-  console.log('[Sentinels] Auto-analyzing tab:', tabId, tab.url);
+  // Auto-analyzing
   try {
     const result = await new Promise((resolve, reject) => {
       chrome.tabs.sendMessage(tabId, { type: 'PING' }, response => {
@@ -609,7 +621,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       try {
         await chrome.scripting.executeScript({
           target: { tabId },
-          files: ['content.js']
+          files: ['sent_content.js']
         });
         await new Promise(r => setTimeout(r, 300));
       } catch (e) {
@@ -637,7 +649,7 @@ async function autoAnalyzeTab(tabId, url) {
   if (_apiKey) headers['X-Sentinels-Key'] = _apiKey;
 
   try {
-    const response = await fetch(`${_apiBase}/api/analyze`, {
+    const response = await fetch(`${_apiBase}/api/scan/deep`, {
       method: 'POST',
       headers,
       body: JSON.stringify(scrapeResult.data)
@@ -651,20 +663,34 @@ async function autoAnalyzeTab(tabId, url) {
     // Update badge
     updateBadge(tabId, result.score, result.verdict);
 
-    // Show notification for high risk
+    // Show notification for high risk (with dedup)
     if (_showNotifications && result.score < _severityThreshold) {
       const domain = new URL(url).hostname;
-      showChromeNotification(
-        tabId,
-        url,
-        `⚠️ Warning: "${domain}" scored ${result.score}/100 - ${result.verdict}\n${result.summary || ''}`,
-        result.verdict
-      );
+      const lastNotified = RECENTLY_NOTIFIED.get(domain);
+      const now = Date.now();
+      const isRecent = lastNotified && (now - lastNotified) < NOTIFICATION_COOLDOWN_MS;
 
-      // Store warning in timeline
+      // Skip if already notified this domain recently
+      if (!isRecent) {
+        // Skip if tab is currently active (user is looking at it)
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
+        const isActive = activeTab && activeTab.id === tabId;
+
+        if (!isActive) {
+          showChromeNotification(
+            tabId,
+            url,
+            `⚠️ Warning: "${domain}" scored ${result.score}/100 - ${result.verdict}\n${result.summary || ''}`,
+            result.verdict
+          );
+          RECENTLY_NOTIFIED.set(domain, now);
+        }
+      }
+
+      // Always store warning in timeline (even if notification suppressed)
       await dbStoreWarning({
         url,
-        title: document?.title || url,
+        title: url,
         score: result.score,
         verdict: result.verdict,
         flags: result.flags || [],
@@ -722,19 +748,27 @@ function showChromeNotification(tabId, url, message, verdict) {
   });
 
   // Handle notification button clicks
-  const handler = (notifId, btnIdx) => {
+  const handler = async (notifId, btnIdx) => {
     if (notifId !== notificationId) return;
     chrome.notifications.onButtonClicked.removeListener(handler);
 
     if (btnIdx === 0) {
-      // Open popup - can't directly open it, but we can focus the tab
-      chrome.tabs.update(tabId, { active: true });
-      chrome.windows.update(tabId, { focused: true }).catch(() => {});
+      // View Details — focus the tab's window (not just the tab)
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        if (tab?.windowId) {
+          await chrome.windows.update(tab.windowId, { focused: true });
+        }
+        await chrome.tabs.update(tabId, { active: true });
+      } catch (e) { /* tab may have been closed */ }
     } else if (btnIdx === 1) {
+      // Whitelist — persists to IndexedDB and re-evaluates badge
       try {
         const domain = new URL(url).hostname;
-        dbAddWhitelist(domain);
+        await dbAddWhitelist(domain);
         updateBadge(tabId, 100, 'SAFE');
+        // Clear notification since domain is now trusted
+        chrome.notifications.clear(notificationId);
       } catch (e) {}
     }
   };
@@ -748,11 +782,10 @@ function showChromeNotification(tabId, url, message, verdict) {
 
 // ── Main Analysis Handler ──────────────────────────────────────
 async function handleAnalysis(tabId, sendResponse, isAutoScan) {
-  console.log('[Sentinels] Starting analysis for tab:', tabId);
+  // Starting analysis
 
   try {
     const tab = await chrome.tabs.get(tabId);
-    console.log('[Sentinels] Tab URL:', tab.url, 'Status:', tab.status);
 
     if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('about:')) {
       sendResponse({ success: false, error: 'Cannot scan Chrome internal pages. Try a regular website instead.' });
@@ -760,7 +793,6 @@ async function handleAnalysis(tabId, sendResponse, isAutoScan) {
     }
 
     if (tab.status !== 'complete') {
-      console.log('[Sentinels] Waiting for page to finish loading...');
       try {
         await waitForTabComplete(tabId, 20000);
       } catch (waitErr) {
@@ -827,7 +859,7 @@ async function handleAnalysis(tabId, sendResponse, isAutoScan) {
     }
 
     // Use chrome.scripting.executeScript to run scrape directly
-    console.log('[Sentinels] Executing script in tab:', tabId);
+    // Executing script in tab
 
     let scrapeResult;
     try {
@@ -1170,24 +1202,21 @@ async function handleAnalysis(tabId, sendResponse, isAutoScan) {
       });
 
       scrapeResult = { success: true, data: results[0].result };
-      console.log('[Sentinels] Scrape success:', scrapeResult.data.reviewCount, 'reviews,', scrapeResult.data.darkPatterns.length, 'dark patterns');
 
     } catch (scrapeErr) {
       console.error('[Sentinels] Scrape error:', scrapeErr.message);
 
       // ── Retry: re-inject content script and try SCRAPE via messaging ──
-      console.log('[Sentinels] Attempting fallback via content script injection...');
       try {
         await chrome.scripting.executeScript({
           target: { tabId },
-          files: ['content.js']
+          files: ['sent_content.js']
         });
         await new Promise(r => setTimeout(r, 200));
 
         const fallbackResult = await chrome.tabs.sendMessage(tabId, { type: 'SCRAPE' });
         if (fallbackResult?.success) {
           scrapeResult = fallbackResult;
-          console.log('[Sentinels] Fallback scrape succeeded');
         } else {
           sendResponse({ success: false, error: 'Failed to scrape page. The page may restrict extensions.' });
           return;
@@ -1205,11 +1234,10 @@ async function handleAnalysis(tabId, sendResponse, isAutoScan) {
     }
 
     // Send to backend
-    console.log('[Sentinels] Sending to backend:', _apiBase);
     const headers = { 'Content-Type': 'application/json' };
     if (_apiKey) headers['X-Sentinels-Key'] = _apiKey;
 
-    const response = await fetch(`${_apiBase}/api/analyze`, {
+    const response = await fetch(`${_apiBase}/api/scan/deep`, {
       method: 'POST',
       headers,
       body: JSON.stringify(scrapeResult.data)

@@ -1132,12 +1132,12 @@ function renderQuickAnswers(result) {
     btn.className = 'qa-btn';
     btn.textContent = q.label;
     btn.dataset.question = q.prompt;
-    btn.addEventListener('click', () => askQuickQuestion(btn, q.prompt, result));
+    btn.addEventListener('click', () => askQuickQuestion(btn, q.id, result));
     chipsContainer.appendChild(btn);
   });
 }
 
-async function askQuickQuestion(btn, prompt, result) {
+async function askQuickQuestion(btn, key, result) {
   const answerEl = document.getElementById('qaAnswer');
   const loadingEl = document.getElementById('qaLoading');
   if (!answerEl || !loadingEl) return;
@@ -1152,7 +1152,7 @@ async function askQuickQuestion(btn, prompt, result) {
       type: 'ASK_QUESTION',
       url: result.url,
       result: result,
-      question: prompt
+      question: key
     });
 
     loadingEl.style.display = 'none';
@@ -1176,7 +1176,7 @@ async function askQuickQuestion(btn, prompt, result) {
           ? 'This site appears similar to legitimate business websites.'
           : 'This site does not resemble a typical legitimate business website.'
       };
-      answerEl.textContent = answers[prompt] || 'Analysis available after scanning the page.';
+      answerEl.textContent = answers[key] || 'Analysis available after scanning the page.';
       answerEl.style.display = 'block';
     }
   } catch (err) {

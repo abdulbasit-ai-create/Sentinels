@@ -30,7 +30,7 @@ async function runTest() {
   console.log('---');
 
   try {
-    const response = await fetch('http://localhost:3001/api/analyze', {
+    const response = await fetch('http://localhost:3001/api/scan/deep', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(testPayload)
