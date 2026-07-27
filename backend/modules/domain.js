@@ -12,7 +12,12 @@
 //  - Brand impersonation via character substitution / look-alike
 // ============================================================
 
-const whois = require('whois');
+// ponytail: native TCP WHOIS lookup replaces the `whois` npm package
+// which is ESM-only and breaks CJS require(). Uses raw TCP socket via
+// Node's built-in `net` module — zero dependencies.
+// Upgrade path: if WHOIS query volume exceeds ~100/day, add a proper
+// async WHOIS library that supports CJS or migrate the project to ESM.
+const net = require('net');
 
 // ── In-memory cache (TTL: 1 hour) ───────────────────────────
 const CACHE = new Map();
@@ -776,14 +781,32 @@ async function whoisCheckDomain(hostname) {
   };
 }
 
+// ponytail: native TCP WHOIS query. Queries whois.iana.org first to
+// find the authoritative WHOIS server for the TLD, then queries that.
+// Ceiling: sequential two-hop lookup (~2-8s). For bulk WHOIS, batch
+// through a single server or cache referral results per-TLD.
 function whoisLookup(domain, timeoutMs = 8000) {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('WHOIS timeout')), timeoutMs);
-    whois.lookup(domain, (err, data) => {
-      clearTimeout(timeout);
-      if (err) return reject(err);
-      resolve(data || '');
+  return whoisQueryRaw(domain, 'whois.iana.org', 43, timeoutMs / 2)
+    .then(ianaResp => {
+      const refMatch = ianaResp.match(/refer:\s*(\S+)/i);
+      const whoisServer = refMatch ? refMatch[1] : 'whois.verisign-grs.com';
+      return whoisQueryRaw(domain, whoisServer, 43, timeoutMs / 2);
     });
+}
+
+function whoisQueryRaw(query, host, port, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const socket = new net.Socket();
+    let buffer = '';
+    const timer = setTimeout(() => {
+      socket.destroy();
+      reject(new Error(`WHOIS timeout (${host})`));
+    }, timeoutMs);
+
+    socket.connect(port, host, () => socket.write(query + '\r\n'));
+    socket.on('data', data => { buffer += data.toString('utf-8'); });
+    socket.on('end', () => { clearTimeout(timer); resolve(buffer); });
+    socket.on('error', err => { clearTimeout(timer); reject(err); });
   });
 }
 
