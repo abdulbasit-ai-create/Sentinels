@@ -59,10 +59,14 @@ app.use(cors({
       return cb(new Error(`Origin not allowed: ${origin}`));
     }
 
-    // Permissive mode (EXTENSION_ID not set): accept any browser extension
+    // Permissive mode (EXTENSION_ID not set): accept browser extensions + dashboard
     const isChromeExt = origin.startsWith('chrome-extension://');
     const isMozExt = origin.startsWith('moz-extension://');
-    if (isChromeExt || isMozExt || isLocalhost) {
+    // ponytail: allow the Vercel dashboard origin in dev mode. When EXTENSION_ID
+    // is set (production), the dashboard should either be on the same domain or
+    // explicitly added via env var.
+    const isDashboard = origin.endsWith('.vercel.app') || origin.startsWith('https://website-');
+    if (isChromeExt || isMozExt || isLocalhost || isDashboard) {
       return cb(null, origin);
     }
     return cb(new Error(`Origin not allowed: ${origin}`));
